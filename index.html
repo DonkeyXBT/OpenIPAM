@@ -5,39 +5,108 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>IP Database - IPAM & CMDB</title>
     <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="app-container">
         <!-- Sidebar Navigation -->
         <nav class="sidebar">
             <div class="logo">
-                <h1>IP Database</h1>
-                <span class="subtitle">IPAM & CMDB</span>
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3"/>
+                        <path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
+                        <path d="M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+                    </svg>
+                </div>
+                <div class="logo-text">
+                    <h1>NetManager</h1>
+                    <span class="subtitle">IPAM & CMDB</span>
+                </div>
             </div>
-            <ul class="nav-menu">
-                <li class="nav-item active" data-page="dashboard">
-                    <span class="nav-icon">📊</span>
-                    <span>Dashboard</span>
-                </li>
-                <li class="nav-item" data-page="subnets">
-                    <span class="nav-icon">🌐</span>
-                    <span>Subnet Management</span>
-                </li>
-                <li class="nav-item" data-page="hosts">
-                    <span class="nav-icon">🖥️</span>
-                    <span>Host Management</span>
-                </li>
-                <li class="nav-item" data-page="ipam">
-                    <span class="nav-icon">🔢</span>
-                    <span>IP Addresses</span>
-                </li>
-                <li class="nav-item" data-page="import">
-                    <span class="nav-icon">📁</span>
-                    <span>Import / Export</span>
-                </li>
-            </ul>
+
+            <div class="nav-section">
+                <span class="nav-section-title">Overview</span>
+                <ul class="nav-menu">
+                    <li class="nav-item active" data-page="dashboard">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7" rx="1"/>
+                            <rect x="14" y="3" width="7" height="7" rx="1"/>
+                            <rect x="3" y="14" width="7" height="7" rx="1"/>
+                            <rect x="14" y="14" width="7" height="7" rx="1"/>
+                        </svg>
+                        <span>Dashboard</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="nav-section">
+                <span class="nav-section-title">Management</span>
+                <ul class="nav-menu">
+                    <li class="nav-item" data-page="companies">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 21h18"/>
+                            <path d="M9 8h1m-1 4h1m4-4h1m-1 4h1"/>
+                            <path d="M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16"/>
+                        </svg>
+                        <span>Companies</span>
+                    </li>
+                    <li class="nav-item" data-page="subnets">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/>
+                        </svg>
+                        <span>Subnets</span>
+                    </li>
+                    <li class="nav-item" data-page="hosts">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2"/>
+                            <path d="M8 21h8m-4-4v4"/>
+                        </svg>
+                        <span>Hosts</span>
+                    </li>
+                    <li class="nav-item" data-page="ipam">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zm0 8a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1v-2zm0 8a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1v-2z"/>
+                        </svg>
+                        <span>IP Addresses</span>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="nav-section">
+                <span class="nav-section-title">Tools</span>
+                <ul class="nav-menu">
+                    <li class="nav-item" data-page="import">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <span>Import / Export</span>
+                    </li>
+                </ul>
+            </div>
+
             <div class="sidebar-footer">
-                <button id="clearDataBtn" class="btn-danger-small">Clear All Data</button>
+                <div class="storage-info">
+                    <div class="storage-label">
+                        <span>Local Storage</span>
+                        <span id="storageUsed">0 KB</span>
+                    </div>
+                    <div class="storage-bar">
+                        <div class="storage-fill" id="storageFill"></div>
+                    </div>
+                </div>
+                <button id="clearDataBtn" class="btn-danger-outline">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                    </svg>
+                    Clear All Data
+                </button>
             </div>
         </nav>
 
@@ -46,82 +115,150 @@
             <!-- Dashboard Page -->
             <div id="dashboard" class="page active">
                 <div class="page-header">
-                    <h2>Dashboard</h2>
-                    <p class="page-description">Overview of your network infrastructure</p>
+                    <div class="page-title">
+                        <h2>Dashboard</h2>
+                        <p class="page-description">Overview of your network infrastructure</p>
+                    </div>
+                    <div class="header-actions">
+                        <button class="btn-primary" onclick="showQuickAddModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"/>
+                                <line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            Quick Add
+                        </button>
+                    </div>
                 </div>
+
                 <div class="stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon blue">🌐</div>
+                    <div class="stat-card gradient-blue">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 21h18M9 8h1m-1 4h1m4-4h1m-1 4h1M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16"/>
+                            </svg>
+                        </div>
+                        <div class="stat-info">
+                            <span class="stat-value" id="totalCompanies">0</span>
+                            <span class="stat-label">Companies</span>
+                        </div>
+                        <div class="stat-trend up">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="stat-card gradient-purple">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M2 12h20"/>
+                            </svg>
+                        </div>
                         <div class="stat-info">
                             <span class="stat-value" id="totalSubnets">0</span>
                             <span class="stat-label">Subnets</span>
                         </div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-icon green">🖥️</div>
+                    <div class="stat-card gradient-green">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                <path d="M8 21h8m-4-4v4"/>
+                            </svg>
+                        </div>
                         <div class="stat-info">
                             <span class="stat-value" id="totalHosts">0</span>
                             <span class="stat-label">Total Hosts</span>
                         </div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-icon yellow">▶️</div>
+                    <div class="stat-card gradient-orange">
+                        <div class="stat-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                            </svg>
+                        </div>
                         <div class="stat-info">
                             <span class="stat-value" id="runningHosts">0</span>
                             <span class="stat-label">Running</span>
                         </div>
                     </div>
-                    <div class="stat-card">
-                        <div class="stat-icon red">⏹️</div>
-                        <div class="stat-info">
-                            <span class="stat-value" id="stoppedHosts">0</span>
-                            <span class="stat-label">Stopped</span>
-                        </div>
-                    </div>
                 </div>
+
                 <div class="dashboard-grid">
                     <div class="card">
                         <div class="card-header">
                             <h3>IP Utilization</h3>
+                            <div class="card-actions">
+                                <select id="utilizationFilter" class="select-small" onchange="refreshDashboard()">
+                                    <option value="">All Companies</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="card-body">
                             <div id="ipUtilization">
-                                <div class="utilization-bar-container">
-                                    <div class="utilization-info">
-                                        <span>Overall Usage</span>
-                                        <span id="overallUsagePercent">0%</span>
+                                <div class="utilization-chart">
+                                    <div class="donut-chart" id="utilizationDonut">
+                                        <svg viewBox="0 0 36 36">
+                                            <path class="donut-ring" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                            <path class="donut-segment" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"/>
+                                        </svg>
+                                        <div class="donut-center">
+                                            <span class="donut-value" id="overallUsagePercent">0%</span>
+                                            <span class="donut-label">Used</span>
+                                        </div>
                                     </div>
-                                    <div class="utilization-bar">
-                                        <div class="utilization-fill" id="overallUsageBar" style="width: 0%"></div>
-                                    </div>
-                                    <div class="utilization-details">
-                                        <span><span id="assignedIPs">0</span> assigned</span>
-                                        <span><span id="availableIPs">0</span> available</span>
+                                    <div class="utilization-legend">
+                                        <div class="legend-item">
+                                            <span class="legend-dot assigned"></span>
+                                            <span class="legend-label">Assigned</span>
+                                            <span class="legend-value" id="assignedIPs">0</span>
+                                        </div>
+                                        <div class="legend-item">
+                                            <span class="legend-dot available"></span>
+                                            <span class="legend-label">Available</span>
+                                            <span class="legend-value" id="availableIPs">0</span>
+                                        </div>
+                                        <div class="legend-item">
+                                            <span class="legend-dot reserved"></span>
+                                            <span class="legend-label">Reserved</span>
+                                            <span class="legend-value" id="reservedIPs">0</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+
                     <div class="card">
                         <div class="card-header">
-                            <h3>Subnet Overview</h3>
+                            <h3>Companies Overview</h3>
+                            <a href="#" class="card-link" onclick="navigateTo('companies'); return false;">View All</a>
                         </div>
                         <div class="card-body">
-                            <div id="subnetOverview" class="subnet-list">
-                                <p class="empty-message">No subnets configured</p>
+                            <div id="companiesOverview" class="companies-list">
+                                <p class="empty-state">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <path d="M3 21h18M9 8h1m-1 4h1m4-4h1m-1 4h1M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16"/>
+                                    </svg>
+                                    <span>No companies configured</span>
+                                    <button class="btn-link" onclick="showAddCompanyModal()">Add your first company</button>
+                                </p>
                             </div>
                         </div>
                     </div>
                 </div>
+
                 <div class="card">
                     <div class="card-header">
-                        <h3>Recent Hosts</h3>
+                        <h3>Recent Activity</h3>
+                        <a href="#" class="card-link" onclick="navigateTo('hosts'); return false;">View All Hosts</a>
                     </div>
                     <div class="card-body">
                         <table class="data-table" id="recentHostsTable">
                             <thead>
                                 <tr>
                                     <th>VM Name</th>
+                                    <th>Company</th>
                                     <th>OS</th>
                                     <th>State</th>
                                     <th>IP Addresses</th>
@@ -129,9 +266,37 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td colspan="5" class="empty-message">No hosts found</td></tr>
+                                <tr><td colspan="6" class="empty-message">No hosts found</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Companies Page -->
+            <div id="companies" class="page">
+                <div class="page-header">
+                    <div class="page-title">
+                        <h2>Companies</h2>
+                        <p class="page-description">Manage organizations and their network resources</p>
+                    </div>
+                    <button class="btn-primary" onclick="showAddCompanyModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        Add Company
+                    </button>
+                </div>
+                <div class="companies-grid" id="companiesGrid">
+                    <div class="company-card add-new" onclick="showAddCompanyModal()">
+                        <div class="add-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"/>
+                                <line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                        </div>
+                        <span>Add New Company</span>
                     </div>
                 </div>
             </div>
@@ -139,27 +304,47 @@
             <!-- Subnets Page -->
             <div id="subnets" class="page">
                 <div class="page-header">
-                    <h2>Subnet Management</h2>
-                    <button class="btn-primary" onclick="showAddSubnetModal()">+ Add Subnet</button>
+                    <div class="page-title">
+                        <h2>Subnet Management</h2>
+                        <p class="page-description">Configure and monitor network subnets</p>
+                    </div>
+                    <button class="btn-primary" onclick="showAddSubnetModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        Add Subnet
+                    </button>
+                </div>
+                <div class="filters-bar">
+                    <div class="search-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="M21 21l-4.35-4.35"/>
+                        </svg>
+                        <input type="text" id="subnetSearchInput" placeholder="Search subnets..." onkeyup="filterSubnets()">
+                    </div>
+                    <select id="subnetCompanyFilter" onchange="filterSubnets()">
+                        <option value="">All Companies</option>
+                    </select>
                 </div>
                 <div class="card">
-                    <div class="card-body">
+                    <div class="card-body no-padding">
                         <table class="data-table" id="subnetsTable">
                             <thead>
                                 <tr>
                                     <th>Network</th>
+                                    <th>Company</th>
                                     <th>Name</th>
                                     <th>VLAN</th>
                                     <th>Gateway</th>
-                                    <th>Total IPs</th>
-                                    <th>Assigned</th>
-                                    <th>Available</th>
+                                    <th>Capacity</th>
                                     <th>Usage</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td colspan="9" class="empty-message">No subnets configured</td></tr>
+                                <tr><td colspan="8" class="empty-message">No subnets configured</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -169,11 +354,29 @@
             <!-- Hosts Page -->
             <div id="hosts" class="page">
                 <div class="page-header">
-                    <h2>Host Management (CMDB)</h2>
-                    <button class="btn-primary" onclick="showAddHostModal()">+ Add Host</button>
+                    <div class="page-title">
+                        <h2>Host Management</h2>
+                        <p class="page-description">Configuration Management Database (CMDB)</p>
+                    </div>
+                    <button class="btn-primary" onclick="showAddHostModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        Add Host
+                    </button>
                 </div>
                 <div class="filters-bar">
-                    <input type="text" id="hostSearchInput" placeholder="Search hosts..." onkeyup="filterHosts()">
+                    <div class="search-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="M21 21l-4.35-4.35"/>
+                        </svg>
+                        <input type="text" id="hostSearchInput" placeholder="Search hosts..." onkeyup="filterHosts()">
+                    </div>
+                    <select id="hostCompanyFilter" onchange="filterHosts()">
+                        <option value="">All Companies</option>
+                    </select>
                     <select id="hostStateFilter" onchange="filterHosts()">
                         <option value="">All States</option>
                         <option value="running">Running</option>
@@ -184,23 +387,22 @@
                     </select>
                 </div>
                 <div class="card">
-                    <div class="card-body table-responsive">
+                    <div class="card-body no-padding table-responsive">
                         <table class="data-table" id="hostsTable">
                             <thead>
                                 <tr>
-                                    <th class="sortable" data-sort="vm_name">VM Name ↕</th>
-                                    <th class="sortable" data-sort="operating_system">OS ↕</th>
-                                    <th class="sortable" data-sort="state">State ↕</th>
-                                    <th class="sortable" data-sort="node">Node ↕</th>
-                                    <th>CPU</th>
-                                    <th>Memory</th>
-                                    <th>Disk</th>
+                                    <th class="sortable" data-sort="vm_name">VM Name</th>
+                                    <th>Company</th>
+                                    <th class="sortable" data-sort="operating_system">OS</th>
+                                    <th class="sortable" data-sort="state">State</th>
+                                    <th class="sortable" data-sort="node">Node</th>
+                                    <th>Resources</th>
                                     <th>IP Addresses</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td colspan="9" class="empty-message">No hosts found</td></tr>
+                                <tr><td colspan="8" class="empty-message">No hosts found</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -210,10 +412,29 @@
             <!-- IPAM Page -->
             <div id="ipam" class="page">
                 <div class="page-header">
-                    <h2>IP Address Management</h2>
-                    <button class="btn-primary" onclick="showAssignIPModal()">+ Assign IP</button>
+                    <div class="page-title">
+                        <h2>IP Address Management</h2>
+                        <p class="page-description">Track and manage IP allocations</p>
+                    </div>
+                    <button class="btn-primary" onclick="showAssignIPModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        Assign IP
+                    </button>
                 </div>
                 <div class="filters-bar">
+                    <div class="search-box">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="11" cy="11" r="8"/>
+                            <path d="M21 21l-4.35-4.35"/>
+                        </svg>
+                        <input type="text" id="ipSearchInput" placeholder="Search IP or hostname..." onkeyup="filterIPs()">
+                    </div>
+                    <select id="ipCompanyFilter" onchange="filterIPs()">
+                        <option value="">All Companies</option>
+                    </select>
                     <select id="ipSubnetFilter" onchange="filterIPs()">
                         <option value="">All Subnets</option>
                     </select>
@@ -223,19 +444,18 @@
                         <option value="available">Available</option>
                         <option value="reserved">Reserved</option>
                     </select>
-                    <input type="text" id="ipSearchInput" placeholder="Search IP or hostname..." onkeyup="filterIPs()">
                 </div>
                 <div class="card">
-                    <div class="card-body">
+                    <div class="card-body no-padding">
                         <table class="data-table" id="ipsTable">
                             <thead>
                                 <tr>
-                                    <th class="sortable" data-sort="ip">IP Address ↕</th>
+                                    <th class="sortable" data-sort="ip">IP Address</th>
+                                    <th>Company</th>
                                     <th>Subnet</th>
                                     <th>Status</th>
                                     <th>Assigned To</th>
-                                    <th>OS</th>
-                                    <th>State</th>
+                                    <th>Last Updated</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -250,7 +470,10 @@
             <!-- Import/Export Page -->
             <div id="import" class="page">
                 <div class="page-header">
-                    <h2>Import / Export</h2>
+                    <div class="page-title">
+                        <h2>Import / Export</h2>
+                        <p class="page-description">Manage your data with CSV and backup files</p>
+                    </div>
                 </div>
                 <div class="import-export-grid">
                     <div class="card">
@@ -258,40 +481,92 @@
                             <h3>Import from CSV</h3>
                         </div>
                         <div class="card-body">
-                            <p>Import hosts from a CSV file. Expected columns:</p>
-                            <code class="csv-format">Operating System, Memory Used (GB), Memory Available (GB), VM Name, Node, Disk Size (GB), State, CPU Count, Disk Used (GB), Memory Total (GB), IP Addresses, Fav</code>
+                            <p class="help-text">Import hosts from a CSV file. Select a company to assign imported hosts to.</p>
+                            <div class="form-group">
+                                <label>Assign to Company</label>
+                                <select id="importCompany">
+                                    <option value="">-- No Company --</option>
+                                </select>
+                            </div>
                             <div class="file-upload-area" id="dropZone">
                                 <input type="file" id="csvFileInput" accept=".csv" onchange="handleFileSelect(event)">
-                                <p>📁 Drag & drop CSV file here or click to browse</p>
+                                <div class="upload-icon">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                        <polyline points="17 8 12 3 7 8"/>
+                                        <line x1="12" y1="3" x2="12" y2="15"/>
+                                    </svg>
+                                </div>
+                                <p class="upload-text">Drag & drop CSV file here</p>
+                                <p class="upload-subtext">or click to browse</p>
                             </div>
                             <div class="checkbox-group">
-                                <label>
+                                <label class="checkbox-label">
                                     <input type="checkbox" id="updateExisting" checked>
+                                    <span class="checkmark"></span>
                                     Update existing hosts if found
                                 </label>
                             </div>
                             <div id="importStatus" class="import-status"></div>
+                            <details class="csv-format-details">
+                                <summary>View expected CSV format</summary>
+                                <code class="csv-format">Operating System, Memory Used (GB), Memory Available (GB), VM Name, Node, Disk Size (GB), State, CPU Count, Disk Used (GB), Memory Total (GB), IP Addresses, Fav</code>
+                            </details>
                         </div>
                     </div>
                     <div class="card">
                         <div class="card-header">
-                            <h3>Export to CSV</h3>
+                            <h3>Export Data</h3>
                         </div>
                         <div class="card-body">
-                            <p>Export all hosts to a CSV file.</p>
-                            <button class="btn-primary" onclick="exportToCSV()">Download CSV</button>
+                            <p class="help-text">Export your data to CSV or create a full backup.</p>
+                            <div class="export-options">
+                                <div class="export-option" onclick="exportToCSV()">
+                                    <div class="export-icon">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                                            <polyline points="14 2 14 8 20 8"/>
+                                            <line x1="16" y1="13" x2="8" y2="13"/>
+                                            <line x1="16" y1="17" x2="8" y2="17"/>
+                                        </svg>
+                                    </div>
+                                    <div class="export-info">
+                                        <span class="export-title">Export to CSV</span>
+                                        <span class="export-desc">Download hosts as spreadsheet</span>
+                                    </div>
+                                </div>
+                                <div class="export-option" onclick="backupDatabase()">
+                                    <div class="export-icon">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                            <polyline points="7 10 12 15 17 10"/>
+                                            <line x1="12" y1="15" x2="12" y2="3"/>
+                                        </svg>
+                                    </div>
+                                    <div class="export-info">
+                                        <span class="export-title">Full Backup</span>
+                                        <span class="export-desc">Download complete database (JSON)</span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                     </div>
                     <div class="card">
                         <div class="card-header">
-                            <h3>Backup / Restore</h3>
+                            <h3>Restore Backup</h3>
                         </div>
                         <div class="card-body">
-                            <p>Backup or restore the entire database (including subnets and IP assignments).</p>
-                            <div class="button-group">
-                                <button class="btn-secondary" onclick="backupDatabase()">Download Backup</button>
-                                <button class="btn-secondary" onclick="document.getElementById('restoreInput').click()">Restore Backup</button>
+                            <p class="help-text">Restore a previous backup. This will replace all current data.</p>
+                            <div class="file-upload-area small" onclick="document.getElementById('restoreInput').click()">
                                 <input type="file" id="restoreInput" accept=".json" style="display:none" onchange="restoreDatabase(event)">
+                                <div class="upload-icon small">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                        <polyline points="16 16 12 12 8 16"/>
+                                        <line x1="12" y1="12" x2="12" y2="21"/>
+                                        <path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/>
+                                    </svg>
+                                </div>
+                                <p class="upload-text">Click to select backup file</p>
                             </div>
                         </div>
                     </div>
@@ -303,6 +578,85 @@
     <!-- Modal Templates -->
     <div id="modalOverlay" class="modal-overlay" onclick="closeModal()"></div>
 
+    <!-- Quick Add Modal -->
+    <div id="quickAddModal" class="modal">
+        <div class="modal-header">
+            <h3>Quick Add</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="quick-add-options">
+                <div class="quick-option" onclick="closeModal(); showAddCompanyModal();">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 21h18M9 8h1m-1 4h1m4-4h1m-1 4h1M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16"/>
+                    </svg>
+                    <span>Company</span>
+                </div>
+                <div class="quick-option" onclick="closeModal(); showAddSubnetModal();">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M2 12h20"/>
+                    </svg>
+                    <span>Subnet</span>
+                </div>
+                <div class="quick-option" onclick="closeModal(); showAddHostModal();">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="3" width="20" height="14" rx="2"/>
+                        <path d="M8 21h8m-4-4v4"/>
+                    </svg>
+                    <span>Host</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Company Modal -->
+    <div id="addCompanyModal" class="modal">
+        <div class="modal-header">
+            <h3>Add Company</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="companyForm" onsubmit="saveCompany(event)">
+                <div class="form-group">
+                    <label>Company Name *</label>
+                    <input type="text" id="companyName" placeholder="e.g., Acme Corporation" required>
+                </div>
+                <div class="form-group">
+                    <label>Short Code</label>
+                    <input type="text" id="companyCode" placeholder="e.g., ACME" maxlength="10">
+                    <span class="help-text">Used as prefix for easy identification</span>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Contact Person</label>
+                        <input type="text" id="companyContact" placeholder="e.g., John Doe">
+                    </div>
+                    <div class="form-group">
+                        <label>Contact Email</label>
+                        <input type="email" id="companyEmail" placeholder="e.g., john@acme.com">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Color</label>
+                    <div class="color-picker">
+                        <input type="color" id="companyColor" value="#3498db">
+                        <span class="color-preview" id="colorPreview"></span>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="companyNotes" placeholder="Additional notes..."></textarea>
+                </div>
+                <input type="hidden" id="companyEditId">
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Save Company</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Add Subnet Modal -->
     <div id="addSubnetModal" class="modal">
         <div class="modal-header">
@@ -311,6 +665,12 @@
         </div>
         <div class="modal-body">
             <form id="subnetForm" onsubmit="saveSubnet(event)">
+                <div class="form-group">
+                    <label>Company *</label>
+                    <select id="subnetCompany" required>
+                        <option value="">-- Select Company --</option>
+                    </select>
+                </div>
                 <div class="form-row">
                     <div class="form-group">
                         <label>Network Address *</label>
@@ -374,17 +734,24 @@
         </div>
         <div class="modal-body">
             <form id="hostForm" onsubmit="saveHost(event)">
+                <div class="form-section-title">Basic Information</div>
                 <div class="form-row">
+                    <div class="form-group">
+                        <label>Company *</label>
+                        <select id="hostCompany" required onchange="updateHostSubnets()">
+                            <option value="">-- Select Company --</option>
+                        </select>
+                    </div>
                     <div class="form-group">
                         <label>VM Name *</label>
                         <input type="text" id="hostVMName" required placeholder="e.g., web-server-01">
                     </div>
+                </div>
+                <div class="form-row">
                     <div class="form-group">
                         <label>Operating System</label>
                         <input type="text" id="hostOS" placeholder="e.g., Ubuntu 22.04 LTS">
                     </div>
-                </div>
-                <div class="form-row">
                     <div class="form-group">
                         <label>State</label>
                         <select id="hostState">
@@ -397,6 +764,8 @@
                         <input type="text" id="hostNode" placeholder="e.g., node-01">
                     </div>
                 </div>
+
+                <div class="form-section-title">Resources</div>
                 <div class="form-row">
                     <div class="form-group">
                         <label>CPU Count</label>
@@ -428,27 +797,38 @@
                         </select>
                     </div>
                 </div>
-                <div class="form-section">
-                    <h4>IP Assignment</h4>
-                    <div class="form-group">
-                        <label>Assignment Method</label>
-                        <select id="ipAssignmentMethod" onchange="toggleIPAssignment()">
-                            <option value="auto">Auto-assign from subnet</option>
-                            <option value="manual">Manual entry</option>
-                            <option value="none">No IP assignment</option>
-                        </select>
+
+                <div class="form-section-title">IP Assignment</div>
+                <div class="form-group">
+                    <label>Assignment Method</label>
+                    <div class="radio-group">
+                        <label class="radio-label">
+                            <input type="radio" name="ipMethod" value="auto" checked onchange="toggleIPAssignment()">
+                            <span class="radio-mark"></span>
+                            Auto-assign from subnet
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="ipMethod" value="manual" onchange="toggleIPAssignment()">
+                            <span class="radio-mark"></span>
+                            Manual entry
+                        </label>
+                        <label class="radio-label">
+                            <input type="radio" name="ipMethod" value="none" onchange="toggleIPAssignment()">
+                            <span class="radio-mark"></span>
+                            No IP assignment
+                        </label>
                     </div>
-                    <div id="autoAssignSection" class="form-group">
-                        <label>Select Subnet</label>
-                        <select id="hostAutoSubnet">
-                            <option value="">-- Select Subnet --</option>
-                        </select>
-                        <small id="nextIPPreview" class="help-text"></small>
-                    </div>
-                    <div id="manualIPSection" class="form-group" style="display:none;">
-                        <label>IP Addresses (comma-separated)</label>
-                        <input type="text" id="hostManualIPs" placeholder="e.g., 192.168.1.10, 10.0.0.5">
-                    </div>
+                </div>
+                <div id="autoAssignSection" class="form-group">
+                    <label>Select Subnet</label>
+                    <select id="hostAutoSubnet" onchange="updateNextIPPreview()">
+                        <option value="">-- Select Subnet --</option>
+                    </select>
+                    <span id="nextIPPreview" class="help-text success"></span>
+                </div>
+                <div id="manualIPSection" class="form-group" style="display:none;">
+                    <label>IP Addresses (comma-separated)</label>
+                    <input type="text" id="hostManualIPs" placeholder="e.g., 192.168.1.10, 10.0.0.5">
                 </div>
                 <input type="hidden" id="hostEditId">
                 <div class="form-actions">
@@ -516,7 +896,10 @@
     </div>
 
     <!-- Toast Notification -->
-    <div id="toast" class="toast"></div>
+    <div id="toast" class="toast">
+        <div class="toast-icon"></div>
+        <span class="toast-message"></span>
+    </div>
 
     <script src="app.js"></script>
 </body>

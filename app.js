@@ -1,6 +1,6 @@
 /**
- * IP Database - IPAM & CMDB Solution
- * Pure JavaScript implementation with localStorage
+ * NetManager - IPAM & CMDB Solution
+ * Professional JavaScript Application
  */
 
 // ============================================
@@ -9,30 +9,36 @@
 
 const DB = {
     KEYS: {
+        COMPANIES: 'ipdb_companies',
         SUBNETS: 'ipdb_subnets',
         HOSTS: 'ipdb_hosts',
         IPS: 'ipdb_ips'
     },
 
-    // Get data from localStorage
     get(key) {
         const data = localStorage.getItem(key);
         return data ? JSON.parse(data) : [];
     },
 
-    // Save data to localStorage
     set(key, data) {
         localStorage.setItem(key, JSON.stringify(data));
     },
 
-    // Generate unique ID
     generateId() {
         return Date.now().toString(36) + Math.random().toString(36).substr(2);
     },
 
-    // Clear all data
     clearAll() {
         Object.values(this.KEYS).forEach(key => localStorage.removeItem(key));
+    },
+
+    getStorageSize() {
+        let total = 0;
+        Object.values(this.KEYS).forEach(key => {
+            const item = localStorage.getItem(key);
+            if (item) total += item.length * 2; // UTF-16 characters
+        });
+        return total;
     }
 };
 
@@ -41,22 +47,14 @@ const DB = {
 // ============================================
 
 const IPUtils = {
-    // Convert IP string to integer for comparison
     ipToInt(ip) {
         return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
     },
 
-    // Convert integer back to IP string
     intToIp(int) {
-        return [
-            (int >>> 24) & 255,
-            (int >>> 16) & 255,
-            (int >>> 8) & 255,
-            int & 255
-        ].join('.');
+        return [(int >>> 24) & 255, (int >>> 16) & 255, (int >>> 8) & 255, int & 255].join('.');
     },
 
-    // Validate IP address format
     isValidIP(ip) {
         const pattern = /^(\d{1,3}\.){3}\d{1,3}$/;
         if (!pattern.test(ip)) return false;
@@ -66,14 +64,12 @@ const IPUtils = {
         });
     },
 
-    // Calculate network address from IP and CIDR
     getNetworkAddress(ip, cidr) {
         const ipInt = this.ipToInt(ip);
         const mask = (-1 << (32 - cidr)) >>> 0;
         return this.intToIp((ipInt & mask) >>> 0);
     },
 
-    // Calculate broadcast address
     getBroadcastAddress(networkIp, cidr) {
         const networkInt = this.ipToInt(networkIp);
         const hostBits = 32 - cidr;
@@ -81,13 +77,11 @@ const IPUtils = {
         return this.intToIp(broadcastInt);
     },
 
-    // Get total number of usable IPs in subnet
     getTotalHosts(cidr) {
         if (cidr >= 31) return cidr === 31 ? 2 : 1;
-        return Math.pow(2, 32 - cidr) - 2; // Exclude network and broadcast
+        return Math.pow(2, 32 - cidr) - 2;
     },
 
-    // Check if IP is within a subnet
     isIPInSubnet(ip, networkIp, cidr) {
         const ipInt = this.ipToInt(ip);
         const networkInt = this.ipToInt(networkIp);
@@ -95,25 +89,10 @@ const IPUtils = {
         return (ipInt & mask) === (networkInt & mask);
     },
 
-    // Get all usable IPs in a subnet (for small subnets)
-    getUsableIPs(networkIp, cidr) {
-        const ips = [];
-        const networkInt = this.ipToInt(networkIp);
-        const totalIPs = Math.pow(2, 32 - cidr);
-
-        // Skip network address (first) and broadcast (last)
-        for (let i = 1; i < totalIPs - 1; i++) {
-            ips.push(this.intToIp(networkInt + i));
-        }
-        return ips;
-    },
-
-    // Sort IPs
     sortIPs(ips) {
         return ips.sort((a, b) => this.ipToInt(a) - this.ipToInt(b));
     },
 
-    // Find subnet for an IP
     findSubnetForIP(ip) {
         const subnets = DB.get(DB.KEYS.SUBNETS);
         for (const subnet of subnets) {
@@ -126,52 +105,148 @@ const IPUtils = {
 };
 
 // ============================================
+// Company Management
+// ============================================
+
+const CompanyManager = {
+    getAll() {
+        const companies = DB.get(DB.KEYS.COMPANIES);
+        const subnets = DB.get(DB.KEYS.SUBNETS);
+        const hosts = DB.get(DB.KEYS.HOSTS);
+        const ips = DB.get(DB.KEYS.IPS);
+
+        return companies.map(company => {
+            const companySubnets = subnets.filter(s => s.companyId === company.id);
+            const companyHosts = hosts.filter(h => h.companyId === company.id);
+            const companyIPs = ips.filter(ip => {
+                const subnet = subnets.find(s => s.id === ip.subnetId);
+                return subnet && subnet.companyId === company.id;
+            });
+
+            return {
+                ...company,
+                subnetCount: companySubnets.length,
+                hostCount: companyHosts.length,
+                ipCount: companyIPs.filter(ip => ip.status === 'assigned').length
+            };
+        });
+    },
+
+    getById(id) {
+        const companies = DB.get(DB.KEYS.COMPANIES);
+        return companies.find(c => c.id === id);
+    },
+
+    add(data) {
+        const companies = DB.get(DB.KEYS.COMPANIES);
+
+        const exists = companies.some(c =>
+            c.name.toLowerCase() === data.name.toLowerCase()
+        );
+        if (exists) {
+            return { success: false, message: 'Company already exists' };
+        }
+
+        const newCompany = {
+            id: DB.generateId(),
+            name: data.name,
+            code: data.code || data.name.substring(0, 4).toUpperCase(),
+            contact: data.contact || '',
+            email: data.email || '',
+            color: data.color || '#3b82f6',
+            notes: data.notes || '',
+            createdAt: new Date().toISOString()
+        };
+
+        companies.push(newCompany);
+        DB.set(DB.KEYS.COMPANIES, companies);
+
+        return { success: true, message: 'Company added successfully', company: newCompany };
+    },
+
+    update(id, updates) {
+        const companies = DB.get(DB.KEYS.COMPANIES);
+        const index = companies.findIndex(c => c.id === id);
+
+        if (index === -1) {
+            return { success: false, message: 'Company not found' };
+        }
+
+        companies[index] = { ...companies[index], ...updates, updatedAt: new Date().toISOString() };
+        DB.set(DB.KEYS.COMPANIES, companies);
+
+        return { success: true, message: 'Company updated successfully' };
+    },
+
+    delete(id) {
+        const companies = DB.get(DB.KEYS.COMPANIES);
+        const subnets = DB.get(DB.KEYS.SUBNETS);
+        const hosts = DB.get(DB.KEYS.HOSTS);
+
+        // Check for associated resources
+        const hasSubnets = subnets.some(s => s.companyId === id);
+        const hasHosts = hosts.some(h => h.companyId === id);
+
+        if (hasSubnets || hasHosts) {
+            return { success: false, message: 'Cannot delete company with associated subnets or hosts' };
+        }
+
+        const newCompanies = companies.filter(c => c.id !== id);
+        DB.set(DB.KEYS.COMPANIES, newCompanies);
+
+        return { success: true, message: 'Company deleted successfully' };
+    }
+};
+
+// ============================================
 // Subnet Management
 // ============================================
 
 const SubnetManager = {
-    // Get all subnets with statistics
     getAll() {
         const subnets = DB.get(DB.KEYS.SUBNETS);
         const ips = DB.get(DB.KEYS.IPS);
+        const companies = DB.get(DB.KEYS.COMPANIES);
 
         return subnets.map(subnet => {
             const subnetIPs = ips.filter(ip => ip.subnetId === subnet.id);
             const assignedCount = subnetIPs.filter(ip => ip.status === 'assigned').length;
             const reservedCount = subnetIPs.filter(ip => ip.status === 'reserved').length;
             const totalHosts = IPUtils.getTotalHosts(subnet.cidr);
+            const company = companies.find(c => c.id === subnet.companyId);
 
             return {
                 ...subnet,
                 totalHosts,
                 assignedCount,
                 reservedCount,
-                availableCount: totalHosts - assignedCount - reservedCount
+                availableCount: totalHosts - assignedCount - reservedCount,
+                companyName: company ? company.name : 'Unassigned',
+                companyColor: company ? company.color : '#6b7280'
             };
         });
     },
 
-    // Get subnet by ID
+    getByCompany(companyId) {
+        return this.getAll().filter(s => s.companyId === companyId);
+    },
+
     getById(id) {
         const subnets = DB.get(DB.KEYS.SUBNETS);
         return subnets.find(s => s.id === id);
     },
 
-    // Add new subnet
-    add(subnetData) {
+    add(data) {
         const subnets = DB.get(DB.KEYS.SUBNETS);
 
-        // Validate network address
-        if (!IPUtils.isValidIP(subnetData.network)) {
+        if (!IPUtils.isValidIP(data.network)) {
             return { success: false, message: 'Invalid network address' };
         }
 
-        // Calculate proper network address
-        const networkAddress = IPUtils.getNetworkAddress(subnetData.network, subnetData.cidr);
+        const networkAddress = IPUtils.getNetworkAddress(data.network, data.cidr);
 
-        // Check for duplicates
         const exists = subnets.some(s =>
-            s.network === networkAddress && s.cidr === subnetData.cidr
+            s.network === networkAddress && s.cidr === data.cidr
         );
         if (exists) {
             return { success: false, message: 'Subnet already exists' };
@@ -179,13 +254,14 @@ const SubnetManager = {
 
         const newSubnet = {
             id: DB.generateId(),
+            companyId: data.companyId || null,
             network: networkAddress,
-            cidr: parseInt(subnetData.cidr),
-            name: subnetData.name || '',
-            description: subnetData.description || '',
-            vlanId: subnetData.vlanId || null,
-            gateway: subnetData.gateway || '',
-            dnsServers: subnetData.dnsServers || '',
+            cidr: parseInt(data.cidr),
+            name: data.name || '',
+            description: data.description || '',
+            vlanId: data.vlanId || null,
+            gateway: data.gateway || '',
+            dnsServers: data.dnsServers || '',
             createdAt: new Date().toISOString()
         };
 
@@ -195,7 +271,6 @@ const SubnetManager = {
         return { success: true, message: 'Subnet added successfully', subnet: newSubnet };
     },
 
-    // Update subnet
     update(id, updates) {
         const subnets = DB.get(DB.KEYS.SUBNETS);
         const index = subnets.findIndex(s => s.id === id);
@@ -210,18 +285,15 @@ const SubnetManager = {
         return { success: true, message: 'Subnet updated successfully' };
     },
 
-    // Delete subnet
     delete(id) {
         const subnets = DB.get(DB.KEYS.SUBNETS);
         const ips = DB.get(DB.KEYS.IPS);
 
-        // Check for assigned IPs
         const assignedIPs = ips.filter(ip => ip.subnetId === id && ip.status === 'assigned');
         if (assignedIPs.length > 0) {
             return { success: false, message: 'Cannot delete subnet with assigned IP addresses' };
         }
 
-        // Remove subnet and its IPs
         const newSubnets = subnets.filter(s => s.id !== id);
         const newIPs = ips.filter(ip => ip.subnetId !== id);
 
@@ -237,27 +309,30 @@ const SubnetManager = {
 // ============================================
 
 const IPManager = {
-    // Get all IP records with host info
     getAll() {
         const ips = DB.get(DB.KEYS.IPS);
         const hosts = DB.get(DB.KEYS.HOSTS);
         const subnets = DB.get(DB.KEYS.SUBNETS);
+        const companies = DB.get(DB.KEYS.COMPANIES);
 
         return ips.map(ip => {
             const host = ip.hostId ? hosts.find(h => h.id === ip.hostId) : null;
             const subnet = ip.subnetId ? subnets.find(s => s.id === ip.subnetId) : null;
+            const company = subnet?.companyId ? companies.find(c => c.id === subnet.companyId) : null;
 
             return {
                 ...ip,
                 hostName: host ? host.vmName : null,
                 hostOS: host ? host.operatingSystem : null,
                 hostState: host ? host.state : null,
-                subnetName: subnet ? `${subnet.network}/${subnet.cidr}` : null
+                subnetName: subnet ? `${subnet.network}/${subnet.cidr}` : null,
+                companyId: subnet?.companyId || null,
+                companyName: company ? company.name : null,
+                companyColor: company ? company.color : '#6b7280'
             };
         });
     },
 
-    // Get next available IP in subnet
     getNextAvailable(subnetId) {
         const subnet = SubnetManager.getById(subnetId);
         if (!subnet) return null;
@@ -271,7 +346,6 @@ const IPManager = {
         const networkInt = IPUtils.ipToInt(subnet.network);
         const totalIPs = Math.pow(2, 32 - subnet.cidr);
 
-        // Find first available (skip network address)
         for (let i = 1; i < totalIPs - 1; i++) {
             const candidateIP = IPUtils.intToIp(networkInt + i);
             if (!usedIPs.has(candidateIP)) {
@@ -282,7 +356,6 @@ const IPManager = {
         return null;
     },
 
-    // Assign IP to host
     assign(ipAddress, hostId, subnetId = null) {
         if (!IPUtils.isValidIP(ipAddress)) {
             return { success: false, message: 'Invalid IP address' };
@@ -290,19 +363,14 @@ const IPManager = {
 
         const ips = DB.get(DB.KEYS.IPS);
 
-        // Find or determine subnet
         if (!subnetId) {
             const subnet = IPUtils.findSubnetForIP(ipAddress);
-            if (subnet) {
-                subnetId = subnet.id;
-            }
+            if (subnet) subnetId = subnet.id;
         }
 
-        // Check if IP already exists
         const existingIndex = ips.findIndex(ip => ip.ipAddress === ipAddress);
 
         if (existingIndex !== -1) {
-            // Update existing record
             if (ips[existingIndex].status === 'assigned' && ips[existingIndex].hostId !== hostId) {
                 return { success: false, message: 'IP already assigned to another host' };
             }
@@ -311,7 +379,6 @@ const IPManager = {
             ips[existingIndex].subnetId = subnetId;
             ips[existingIndex].updatedAt = new Date().toISOString();
         } else {
-            // Create new record
             ips.push({
                 id: DB.generateId(),
                 ipAddress,
@@ -326,7 +393,6 @@ const IPManager = {
         return { success: true, message: 'IP assigned successfully' };
     },
 
-    // Release IP
     release(ipAddress) {
         const ips = DB.get(DB.KEYS.IPS);
         const index = ips.findIndex(ip => ip.ipAddress === ipAddress);
@@ -343,7 +409,6 @@ const IPManager = {
         return { success: true, message: 'IP released successfully' };
     },
 
-    // Register IP (from CSV import) - links to subnet and deducts availability
     register(ipAddress, hostId = null, status = 'assigned') {
         if (!IPUtils.isValidIP(ipAddress)) {
             return { success: false, message: 'Invalid IP address' };
@@ -353,17 +418,14 @@ const IPManager = {
         const subnet = IPUtils.findSubnetForIP(ipAddress);
         const subnetId = subnet ? subnet.id : null;
 
-        // Check if already exists
         const existingIndex = ips.findIndex(ip => ip.ipAddress === ipAddress);
 
         if (existingIndex !== -1) {
-            // Update existing
             ips[existingIndex].hostId = hostId;
             ips[existingIndex].status = status;
             if (subnetId) ips[existingIndex].subnetId = subnetId;
             ips[existingIndex].updatedAt = new Date().toISOString();
         } else {
-            // Create new
             ips.push({
                 id: DB.generateId(),
                 ipAddress,
@@ -378,19 +440,16 @@ const IPManager = {
         return { success: true, subnetId };
     },
 
-    // Get IPs for a host
     getByHostId(hostId) {
         const ips = DB.get(DB.KEYS.IPS);
         return ips.filter(ip => ip.hostId === hostId);
     },
 
-    // Get IPs for a subnet
     getBySubnetId(subnetId) {
         const ips = DB.get(DB.KEYS.IPS);
         return ips.filter(ip => ip.subnetId === subnetId);
     },
 
-    // Update IP status
     updateStatus(ipAddress, status, hostId = null) {
         const ips = DB.get(DB.KEYS.IPS);
         const index = ips.findIndex(ip => ip.ipAddress === ipAddress);
@@ -403,7 +462,6 @@ const IPManager = {
             return { success: true };
         }
 
-        // Create new if doesn't exist
         const subnet = IPUtils.findSubnetForIP(ipAddress);
         ips.push({
             id: DB.generateId(),
@@ -423,21 +481,23 @@ const IPManager = {
 // ============================================
 
 const HostManager = {
-    // Get all hosts with IP info
     getAll() {
         const hosts = DB.get(DB.KEYS.HOSTS);
         const ips = DB.get(DB.KEYS.IPS);
+        const companies = DB.get(DB.KEYS.COMPANIES);
 
         return hosts.map(host => {
             const hostIPs = ips.filter(ip => ip.hostId === host.id);
+            const company = companies.find(c => c.id === host.companyId);
             return {
                 ...host,
-                ipAddresses: hostIPs.map(ip => ip.ipAddress).join(', ')
+                ipAddresses: hostIPs.map(ip => ip.ipAddress).join(', '),
+                companyName: company ? company.name : 'Unassigned',
+                companyColor: company ? company.color : '#6b7280'
             };
         });
     },
 
-    // Get host by ID
     getById(id) {
         const hosts = DB.get(DB.KEYS.HOSTS);
         const host = hosts.find(h => h.id === id);
@@ -445,36 +505,39 @@ const HostManager = {
 
         const ips = DB.get(DB.KEYS.IPS);
         const hostIPs = ips.filter(ip => ip.hostId === id);
+        const companies = DB.get(DB.KEYS.COMPANIES);
+        const company = companies.find(c => c.id === host.companyId);
 
         return {
             ...host,
-            ipAddresses: hostIPs.map(ip => ip.ipAddress).join(', ')
+            ipAddresses: hostIPs.map(ip => ip.ipAddress).join(', '),
+            companyName: company ? company.name : 'Unassigned',
+            companyColor: company ? company.color : '#6b7280'
         };
     },
 
-    // Get host by VM name
     getByVMName(vmName) {
         const hosts = DB.get(DB.KEYS.HOSTS);
         return hosts.find(h => h.vmName.toLowerCase() === vmName.toLowerCase());
     },
 
-    // Add new host
-    add(hostData, ipAssignment = {}) {
+    add(data, ipAssignment = {}) {
         const hosts = DB.get(DB.KEYS.HOSTS);
 
         const newHost = {
             id: DB.generateId(),
-            vmName: hostData.vmName,
-            operatingSystem: hostData.operatingSystem || '',
-            memoryUsedGB: parseFloat(hostData.memoryUsedGB) || null,
-            memoryAvailableGB: parseFloat(hostData.memoryAvailableGB) || null,
-            memoryTotalGB: parseFloat(hostData.memoryTotalGB) || null,
-            node: hostData.node || '',
-            diskSizeGB: parseFloat(hostData.diskSizeGB) || null,
-            diskUsedGB: parseFloat(hostData.diskUsedGB) || null,
-            state: hostData.state || 'running',
-            cpuCount: parseInt(hostData.cpuCount) || null,
-            favorite: hostData.favorite ? 1 : 0,
+            companyId: data.companyId || null,
+            vmName: data.vmName,
+            operatingSystem: data.operatingSystem || '',
+            memoryUsedGB: parseFloat(data.memoryUsedGB) || null,
+            memoryAvailableGB: parseFloat(data.memoryAvailableGB) || null,
+            memoryTotalGB: parseFloat(data.memoryTotalGB) || null,
+            node: data.node || '',
+            diskSizeGB: parseFloat(data.diskSizeGB) || null,
+            diskUsedGB: parseFloat(data.diskUsedGB) || null,
+            state: data.state || 'running',
+            cpuCount: parseInt(data.cpuCount) || null,
+            favorite: data.favorite ? 1 : 0,
             createdAt: new Date().toISOString()
         };
 
@@ -483,7 +546,6 @@ const HostManager = {
 
         const assignedIPs = [];
 
-        // Handle IP assignment
         if (ipAssignment.method === 'auto' && ipAssignment.subnetId) {
             const nextIP = IPManager.getNextAvailable(ipAssignment.subnetId);
             if (nextIP) {
@@ -500,13 +562,12 @@ const HostManager = {
 
         return {
             success: true,
-            message: `Host added successfully${assignedIPs.length ? ' with IPs: ' + assignedIPs.join(', ') : ''}`,
+            message: `Host added${assignedIPs.length ? ' with IPs: ' + assignedIPs.join(', ') : ''}`,
             host: newHost,
             assignedIPs
         };
     },
 
-    // Update host
     update(id, updates) {
         const hosts = DB.get(DB.KEYS.HOSTS);
         const index = hosts.findIndex(h => h.id === id);
@@ -515,7 +576,6 @@ const HostManager = {
             return { success: false, message: 'Host not found' };
         }
 
-        // Parse numeric fields
         if (updates.memoryUsedGB !== undefined) updates.memoryUsedGB = parseFloat(updates.memoryUsedGB) || null;
         if (updates.memoryAvailableGB !== undefined) updates.memoryAvailableGB = parseFloat(updates.memoryAvailableGB) || null;
         if (updates.memoryTotalGB !== undefined) updates.memoryTotalGB = parseFloat(updates.memoryTotalGB) || null;
@@ -529,12 +589,10 @@ const HostManager = {
         return { success: true, message: 'Host updated successfully' };
     },
 
-    // Delete host
     delete(id) {
         const hosts = DB.get(DB.KEYS.HOSTS);
         const ips = DB.get(DB.KEYS.IPS);
 
-        // Release all IPs
         const updatedIPs = ips.map(ip => {
             if (ip.hostId === id) {
                 return { ...ip, hostId: null, status: 'available', updatedAt: new Date().toISOString() };
@@ -556,12 +614,10 @@ const HostManager = {
 // ============================================
 
 const CSVManager = {
-    // Parse CSV content
     parseCSV(content) {
         const lines = content.split('\n').filter(line => line.trim());
         if (lines.length === 0) return [];
 
-        // Parse header (handle quoted values)
         const parseRow = (row) => {
             const values = [];
             let current = '';
@@ -597,8 +653,7 @@ const CSVManager = {
         return data;
     },
 
-    // Import from CSV
-    import(content, updateExisting = true) {
+    import(content, companyId = null, updateExisting = true) {
         const data = this.parseCSV(content);
         const stats = { added: 0, updated: 0, skipped: 0, errors: 0 };
         const errors = [];
@@ -611,17 +666,15 @@ const CSVManager = {
                     return;
                 }
 
-                // Parse IP addresses
                 const ipField = row['IP Addresses'] || '';
                 const ipAddresses = ipField.split(',').map(ip => ip.trim()).filter(ip => ip);
 
-                // Check for existing host
                 const existingHost = HostManager.getByVMName(vmName);
 
                 if (existingHost) {
                     if (updateExisting) {
-                        // Update existing host
                         HostManager.update(existingHost.id, {
+                            companyId: companyId || existingHost.companyId,
                             operatingSystem: row['Operating System'] || existingHost.operatingSystem,
                             memoryUsedGB: row['Memory Used (GB)'] || existingHost.memoryUsedGB,
                             memoryAvailableGB: row['Memory Available (GB)'] || existingHost.memoryAvailableGB,
@@ -634,7 +687,6 @@ const CSVManager = {
                             favorite: row['Fav'] === '1' || row['Fav']?.toLowerCase() === 'true' ? 1 : 0
                         });
 
-                        // Register IPs and link to subnets
                         ipAddresses.forEach(ip => {
                             if (IPUtils.isValidIP(ip)) {
                                 IPManager.register(ip, existingHost.id, 'assigned');
@@ -646,10 +698,10 @@ const CSVManager = {
                         stats.skipped++;
                     }
                 } else {
-                    // Add new host
                     const hosts = DB.get(DB.KEYS.HOSTS);
                     const newHost = {
                         id: DB.generateId(),
+                        companyId: companyId || null,
                         vmName: vmName,
                         operatingSystem: row['Operating System'] || '',
                         memoryUsedGB: parseFloat(row['Memory Used (GB)']) || null,
@@ -667,7 +719,7 @@ const CSVManager = {
                     hosts.push(newHost);
                     DB.set(DB.KEYS.HOSTS, hosts);
 
-                    // Register IPs - this will automatically link to matching subnets
+                    // Register IPs - automatically links to matching subnets
                     ipAddresses.forEach(ip => {
                         if (IPUtils.isValidIP(ip)) {
                             IPManager.register(ip, newHost.id, 'assigned');
@@ -685,7 +737,6 @@ const CSVManager = {
         return { stats, errors };
     },
 
-    // Export to CSV
     export() {
         const hosts = HostManager.getAll();
         const headers = [
@@ -719,16 +770,14 @@ const CSVManager = {
 };
 
 // ============================================
-// UI Functions
+// UI State & Navigation
 // ============================================
 
-// Current sorting state
 let currentSort = { field: 'vm_name', direction: 'asc' };
 
-// Show toast notification
 function showToast(message, type = 'info') {
     const toast = document.getElementById('toast');
-    toast.textContent = message;
+    toast.querySelector('.toast-message').textContent = message;
     toast.className = `toast ${type} show`;
 
     setTimeout(() => {
@@ -736,41 +785,40 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-// Navigation
 function navigateTo(page) {
-    // Update nav items
     document.querySelectorAll('.nav-item').forEach(item => {
         item.classList.toggle('active', item.dataset.page === page);
     });
 
-    // Update pages
     document.querySelectorAll('.page').forEach(p => {
         p.classList.toggle('active', p.id === page);
     });
 
-    // Refresh page content
     switch (page) {
         case 'dashboard':
             refreshDashboard();
             break;
+        case 'companies':
+            refreshCompaniesGrid();
+            break;
         case 'subnets':
             refreshSubnetsTable();
+            populateCompanyFilters();
             break;
         case 'hosts':
             refreshHostsTable();
-            populateSubnetFilters();
+            populateAllFilters();
             break;
         case 'ipam':
             refreshIPsTable();
-            populateSubnetFilters();
+            populateAllFilters();
             break;
         case 'import':
-            // Nothing to refresh
+            populateImportCompanySelect();
             break;
     }
 }
 
-// Initialize navigation
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', () => navigateTo(item.dataset.page));
 });
@@ -780,57 +828,80 @@ document.querySelectorAll('.nav-item').forEach(item => {
 // ============================================
 
 function refreshDashboard() {
+    const companies = CompanyManager.getAll();
     const subnets = SubnetManager.getAll();
     const hosts = HostManager.getAll();
 
-    // Stats
+    // Update stats
+    document.getElementById('totalCompanies').textContent = companies.length;
     document.getElementById('totalSubnets').textContent = subnets.length;
     document.getElementById('totalHosts').textContent = hosts.length;
     document.getElementById('runningHosts').textContent = hosts.filter(h => h.state?.toLowerCase() === 'running').length;
-    document.getElementById('stoppedHosts').textContent = hosts.filter(h => h.state?.toLowerCase() === 'stopped').length;
+
+    // Filter by company if selected
+    const filterCompany = document.getElementById('utilizationFilter')?.value;
+    let filteredSubnets = filterCompany
+        ? subnets.filter(s => s.companyId === filterCompany)
+        : subnets;
 
     // IP Utilization
     let totalCapacity = 0;
     let totalAssigned = 0;
+    let totalReserved = 0;
 
-    subnets.forEach(subnet => {
+    filteredSubnets.forEach(subnet => {
         totalCapacity += subnet.totalHosts;
         totalAssigned += subnet.assignedCount;
+        totalReserved += subnet.reservedCount;
     });
 
     const usagePercent = totalCapacity > 0 ? Math.round((totalAssigned / totalCapacity) * 100) : 0;
+
     document.getElementById('overallUsagePercent').textContent = `${usagePercent}%`;
     document.getElementById('assignedIPs').textContent = totalAssigned;
-    document.getElementById('availableIPs').textContent = totalCapacity - totalAssigned;
+    document.getElementById('availableIPs').textContent = totalCapacity - totalAssigned - totalReserved;
+    document.getElementById('reservedIPs').textContent = totalReserved;
 
-    const usageBar = document.getElementById('overallUsageBar');
-    usageBar.style.width = `${usagePercent}%`;
-    usageBar.classList.toggle('warning', usagePercent >= 70 && usagePercent < 90);
-    usageBar.classList.toggle('danger', usagePercent >= 90);
+    // Update donut chart
+    const donutSegment = document.querySelector('.donut-segment');
+    if (donutSegment) {
+        donutSegment.setAttribute('stroke-dasharray', `${usagePercent}, 100`);
+    }
 
-    // Subnet Overview
-    const subnetOverview = document.getElementById('subnetOverview');
-    if (subnets.length === 0) {
-        subnetOverview.innerHTML = '<p class="empty-message">No subnets configured</p>';
+    // Populate utilization filter
+    const utilizationFilter = document.getElementById('utilizationFilter');
+    if (utilizationFilter) {
+        const currentValue = utilizationFilter.value;
+        utilizationFilter.innerHTML = '<option value="">All Companies</option>' +
+            companies.map(c => `<option value="${c.id}"${c.id === currentValue ? ' selected' : ''}>${c.name}</option>`).join('');
+    }
+
+    // Companies Overview
+    const companiesOverview = document.getElementById('companiesOverview');
+    if (companies.length === 0) {
+        companiesOverview.innerHTML = `
+            <p class="empty-state">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                    <path d="M3 21h18M9 8h1m-1 4h1m4-4h1m-1 4h1M5 21V5a2 2 0 012-2h10a2 2 0 012 2v16"/>
+                </svg>
+                <span>No companies configured</span>
+                <button class="btn-link" onclick="showAddCompanyModal()">Add your first company</button>
+            </p>
+        `;
     } else {
-        subnetOverview.innerHTML = subnets.map(subnet => {
-            const usage = subnet.totalHosts > 0 ? Math.round((subnet.assignedCount / subnet.totalHosts) * 100) : 0;
-            const barClass = usage >= 90 ? 'danger' : usage >= 70 ? 'warning' : '';
-            return `
-                <div class="subnet-item">
-                    <div class="subnet-item-info">
-                        <h4>${subnet.network}/${subnet.cidr}</h4>
-                        <span>${subnet.name || 'Unnamed'}</span>
-                    </div>
-                    <div class="subnet-item-usage">
-                        <div class="mini-progress">
-                            <div class="fill ${barClass}" style="width: ${usage}%"></div>
-                        </div>
-                        <span class="usage-value">${subnet.assignedCount}/${subnet.totalHosts}</span>
-                    </div>
+        companiesOverview.innerHTML = companies.slice(0, 5).map(company => `
+            <div class="company-item">
+                <div class="company-color" style="background: ${company.color}"></div>
+                <div class="company-info">
+                    <h4>${escapeHtml(company.name)}</h4>
+                    <span>${company.code || ''}</span>
                 </div>
-            `;
-        }).join('');
+                <div class="company-stats">
+                    <span><strong>${company.subnetCount}</strong> subnets</span>
+                    <span><strong>${company.hostCount}</strong> hosts</span>
+                </div>
+            </div>
+        `).join('');
     }
 
     // Recent Hosts
@@ -838,11 +909,17 @@ function refreshDashboard() {
     const recentTable = document.getElementById('recentHostsTable').querySelector('tbody');
 
     if (recentHosts.length === 0) {
-        recentTable.innerHTML = '<tr><td colspan="5" class="empty-message">No hosts found</td></tr>';
+        recentTable.innerHTML = '<tr><td colspan="6" class="empty-message">No hosts found</td></tr>';
     } else {
         recentTable.innerHTML = recentHosts.map(host => `
             <tr>
-                <td>${escapeHtml(host.vmName)}</td>
+                <td><strong>${escapeHtml(host.vmName)}</strong>${host.favorite ? ' ⭐' : ''}</td>
+                <td>
+                    <span class="company-badge" style="background: ${host.companyColor}15; color: ${host.companyColor}">
+                        <span class="company-badge-dot" style="background: ${host.companyColor}"></span>
+                        ${escapeHtml(host.companyName)}
+                    </span>
+                </td>
                 <td>${escapeHtml(host.operatingSystem || '-')}</td>
                 <td><span class="status-badge ${host.state?.toLowerCase()}">${host.state || '-'}</span></td>
                 <td>${escapeHtml(host.ipAddresses || '-')}</td>
@@ -850,10 +927,157 @@ function refreshDashboard() {
             </tr>
         `).join('');
     }
+
+    // Update storage info
+    updateStorageInfo();
+}
+
+function updateStorageInfo() {
+    const size = DB.getStorageSize();
+    const sizeKB = (size / 1024).toFixed(1);
+    document.getElementById('storageUsed').textContent = `${sizeKB} KB`;
+
+    // Assume 5MB limit for localStorage
+    const percentage = Math.min((size / (5 * 1024 * 1024)) * 100, 100);
+    document.getElementById('storageFill').style.width = `${percentage}%`;
 }
 
 // ============================================
-// Subnet Management UI
+// Companies UI
+// ============================================
+
+function refreshCompaniesGrid() {
+    const companies = CompanyManager.getAll();
+    const grid = document.getElementById('companiesGrid');
+
+    let html = `
+        <div class="company-card add-new" onclick="showAddCompanyModal()">
+            <div class="add-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="12" y1="5" x2="12" y2="19"/>
+                    <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+            </div>
+            <span>Add New Company</span>
+        </div>
+    `;
+
+    companies.forEach(company => {
+        html += `
+            <div class="company-card" style="--company-color: ${company.color}" onclick="viewCompanyDetails('${company.id}')">
+                <div style="position: absolute; top: 0; left: 0; right: 0; height: 4px; background: ${company.color}"></div>
+                <div class="company-card-actions">
+                    <button class="btn-icon edit" onclick="event.stopPropagation(); editCompany('${company.id}')" title="Edit">✏️</button>
+                    <button class="btn-icon delete" onclick="event.stopPropagation(); deleteCompany('${company.id}')" title="Delete">🗑️</button>
+                </div>
+                <div class="company-card-header">
+                    <div class="company-card-icon" style="background: ${company.color}">
+                        ${company.code ? company.code.substring(0, 2) : company.name.substring(0, 2).toUpperCase()}
+                    </div>
+                    <div class="company-card-title">
+                        <h3>${escapeHtml(company.name)}</h3>
+                        <span>${company.contact || 'No contact'}</span>
+                    </div>
+                </div>
+                <div class="company-card-stats">
+                    <div class="company-stat">
+                        <span class="company-stat-value">${company.subnetCount}</span>
+                        <span class="company-stat-label">Subnets</span>
+                    </div>
+                    <div class="company-stat">
+                        <span class="company-stat-value">${company.hostCount}</span>
+                        <span class="company-stat-label">Hosts</span>
+                    </div>
+                    <div class="company-stat">
+                        <span class="company-stat-value">${company.ipCount}</span>
+                        <span class="company-stat-label">IPs</span>
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    grid.innerHTML = html;
+}
+
+function showAddCompanyModal() {
+    document.getElementById('companyForm').reset();
+    document.getElementById('companyEditId').value = '';
+    document.getElementById('companyColor').value = '#3b82f6';
+    document.querySelector('#addCompanyModal .modal-header h3').textContent = 'Add Company';
+    openModal('addCompanyModal');
+}
+
+function editCompany(id) {
+    const company = CompanyManager.getById(id);
+    if (!company) return;
+
+    document.getElementById('companyName').value = company.name || '';
+    document.getElementById('companyCode').value = company.code || '';
+    document.getElementById('companyContact').value = company.contact || '';
+    document.getElementById('companyEmail').value = company.email || '';
+    document.getElementById('companyColor').value = company.color || '#3b82f6';
+    document.getElementById('companyNotes').value = company.notes || '';
+    document.getElementById('companyEditId').value = id;
+
+    document.querySelector('#addCompanyModal .modal-header h3').textContent = 'Edit Company';
+    openModal('addCompanyModal');
+}
+
+function saveCompany(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('companyEditId').value;
+    const data = {
+        name: document.getElementById('companyName').value,
+        code: document.getElementById('companyCode').value,
+        contact: document.getElementById('companyContact').value,
+        email: document.getElementById('companyEmail').value,
+        color: document.getElementById('companyColor').value,
+        notes: document.getElementById('companyNotes').value
+    };
+
+    let result;
+    if (id) {
+        result = CompanyManager.update(id, data);
+    } else {
+        result = CompanyManager.add(data);
+    }
+
+    if (result.success) {
+        showToast(result.message, 'success');
+        closeModal();
+        refreshCompaniesGrid();
+        refreshDashboard();
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+function deleteCompany(id) {
+    const company = CompanyManager.getById(id);
+    if (!company) return;
+
+    if (!confirm(`Delete company "${company.name}"?`)) return;
+
+    const result = CompanyManager.delete(id);
+    if (result.success) {
+        showToast(result.message, 'success');
+        refreshCompaniesGrid();
+        refreshDashboard();
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+function viewCompanyDetails(id) {
+    navigateTo('subnets');
+    document.getElementById('subnetCompanyFilter').value = id;
+    filterSubnets();
+}
+
+// ============================================
+// Subnets UI
 // ============================================
 
 function refreshSubnetsTable() {
@@ -861,25 +1085,33 @@ function refreshSubnetsTable() {
     const tbody = document.getElementById('subnetsTable').querySelector('tbody');
 
     if (subnets.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="empty-message">No subnets configured</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-message">No subnets configured</td></tr>';
         return;
     }
 
     tbody.innerHTML = subnets.map(subnet => {
         const usage = subnet.totalHosts > 0 ? Math.round((subnet.assignedCount / subnet.totalHosts) * 100) : 0;
-        const barClass = usage >= 90 ? 'danger' : usage >= 70 ? 'warning' : '';
+        const barClass = usage >= 90 ? 'high' : usage >= 70 ? 'medium' : 'low';
+
         return `
-            <tr>
-                <td><strong>${subnet.network}/${subnet.cidr}</strong></td>
+            <tr data-company="${subnet.companyId || ''}">
+                <td><strong style="font-family: monospace;">${subnet.network}/${subnet.cidr}</strong></td>
+                <td>
+                    <span class="company-badge" style="background: ${subnet.companyColor}15; color: ${subnet.companyColor}">
+                        <span class="company-badge-dot" style="background: ${subnet.companyColor}"></span>
+                        ${escapeHtml(subnet.companyName)}
+                    </span>
+                </td>
                 <td>${escapeHtml(subnet.name || '-')}</td>
                 <td>${subnet.vlanId || '-'}</td>
                 <td>${escapeHtml(subnet.gateway || '-')}</td>
-                <td>${subnet.totalHosts}</td>
-                <td>${subnet.assignedCount}</td>
-                <td>${subnet.availableCount}</td>
+                <td>${subnet.assignedCount} / ${subnet.totalHosts}</td>
                 <td>
-                    <div class="mini-progress" title="${usage}%">
-                        <div class="fill ${barClass}" style="width: ${usage}%"></div>
+                    <div class="usage-bar-container">
+                        <div class="usage-bar">
+                            <div class="usage-bar-fill ${barClass}" style="width: ${usage}%"></div>
+                        </div>
+                        <span class="usage-text">${usage}%</span>
                     </div>
                 </td>
                 <td>
@@ -894,9 +1126,28 @@ function refreshSubnetsTable() {
     }).join('');
 }
 
+function filterSubnets() {
+    const search = document.getElementById('subnetSearchInput').value.toLowerCase();
+    const companyFilter = document.getElementById('subnetCompanyFilter').value;
+
+    const rows = document.querySelectorAll('#subnetsTable tbody tr[data-company]');
+
+    rows.forEach(row => {
+        const text = row.textContent.toLowerCase();
+        const company = row.dataset.company;
+
+        let visible = true;
+        if (search && !text.includes(search)) visible = false;
+        if (companyFilter && company !== companyFilter) visible = false;
+
+        row.style.display = visible ? '' : 'none';
+    });
+}
+
 function showAddSubnetModal() {
     document.getElementById('subnetForm').reset();
     document.getElementById('subnetEditId').value = '';
+    populateCompanySelect('subnetCompany');
     document.querySelector('#addSubnetModal .modal-header h3').textContent = 'Add Subnet';
     openModal('addSubnetModal');
 }
@@ -905,6 +1156,9 @@ function editSubnet(id) {
     const subnet = SubnetManager.getById(id);
     if (!subnet) return;
 
+    populateCompanySelect('subnetCompany');
+
+    document.getElementById('subnetCompany').value = subnet.companyId || '';
     document.getElementById('subnetNetwork').value = subnet.network;
     document.getElementById('subnetCIDR').value = subnet.cidr;
     document.getElementById('subnetName').value = subnet.name || '';
@@ -922,7 +1176,8 @@ function saveSubnet(e) {
     e.preventDefault();
 
     const id = document.getElementById('subnetEditId').value;
-    const subnetData = {
+    const data = {
+        companyId: document.getElementById('subnetCompany').value || null,
         network: document.getElementById('subnetNetwork').value,
         cidr: document.getElementById('subnetCIDR').value,
         name: document.getElementById('subnetName').value,
@@ -934,9 +1189,9 @@ function saveSubnet(e) {
 
     let result;
     if (id) {
-        result = SubnetManager.update(id, subnetData);
+        result = SubnetManager.update(id, data);
     } else {
-        result = SubnetManager.add(subnetData);
+        result = SubnetManager.add(data);
     }
 
     if (result.success) {
@@ -972,29 +1227,26 @@ function viewSubnetIPs(subnetId) {
     const ips = IPManager.getBySubnetId(subnetId);
     const hosts = DB.get(DB.KEYS.HOSTS);
 
-    // Create a map of used IPs
     const ipMap = new Map();
     ips.forEach(ip => {
         const host = ip.hostId ? hosts.find(h => h.id === ip.hostId) : null;
         ipMap.set(ip.ipAddress, { status: ip.status, hostName: host?.vmName });
     });
 
-    // Generate IP list for the subnet
     const content = document.getElementById('subnetIPsContent');
     const subnetInfo = SubnetManager.getAll().find(s => s.id === subnetId);
 
     let html = `
         <div style="margin-bottom: 20px;">
-            <h4>${subnet.network}/${subnet.cidr} ${subnet.name ? `(${subnet.name})` : ''}</h4>
-            <p>Total: ${subnetInfo.totalHosts} | Assigned: ${subnetInfo.assignedCount} | Available: ${subnetInfo.availableCount}</p>
+            <h4 style="margin-bottom: 8px;">${subnet.network}/${subnet.cidr} ${subnet.name ? `(${subnet.name})` : ''}</h4>
+            <p style="color: var(--gray-500);">Total: ${subnetInfo.totalHosts} | Assigned: ${subnetInfo.assignedCount} | Available: ${subnetInfo.availableCount}</p>
         </div>
         <div class="ip-list-grid">
     `;
 
-    // Get all usable IPs (limit display for large subnets)
     const networkInt = IPUtils.ipToInt(subnet.network);
     const totalIPs = Math.pow(2, 32 - subnet.cidr);
-    const maxDisplay = Math.min(totalIPs - 2, 254); // Limit to 254 IPs for display
+    const maxDisplay = Math.min(totalIPs - 2, 254);
 
     for (let i = 1; i <= maxDisplay; i++) {
         const ip = IPUtils.intToIp(networkInt + i);
@@ -1025,40 +1277,40 @@ function viewSubnetIPs(subnetId) {
 }
 
 // ============================================
-// Host Management UI
+// Hosts UI
 // ============================================
 
 function refreshHostsTable() {
     let hosts = HostManager.getAll();
-
-    // Apply sorting
     hosts = sortData(hosts, currentSort.field, currentSort.direction);
 
     const tbody = document.getElementById('hostsTable').querySelector('tbody');
 
     if (hosts.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="empty-message">No hosts found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-message">No hosts found</td></tr>';
         return;
     }
 
     tbody.innerHTML = hosts.map(host => {
-        const memoryDisplay = host.memoryTotalGB
-            ? `${host.memoryUsedGB || 0}/${host.memoryTotalGB} GB`
-            : '-';
-        const diskDisplay = host.diskSizeGB
-            ? `${host.diskUsedGB || 0}/${host.diskSizeGB} GB`
-            : '-';
+        const resources = [];
+        if (host.cpuCount) resources.push(`${host.cpuCount} CPU`);
+        if (host.memoryTotalGB) resources.push(`${host.memoryTotalGB}GB RAM`);
+        if (host.diskSizeGB) resources.push(`${host.diskSizeGB}GB Disk`);
 
         return `
-            <tr data-id="${host.id}" data-state="${host.state?.toLowerCase()}" data-ips="${host.ipAddresses}">
+            <tr data-id="${host.id}" data-company="${host.companyId || ''}" data-state="${host.state?.toLowerCase()}" data-ips="${host.ipAddresses}">
                 <td><strong>${escapeHtml(host.vmName)}</strong>${host.favorite ? ' ⭐' : ''}</td>
+                <td>
+                    <span class="company-badge" style="background: ${host.companyColor}15; color: ${host.companyColor}">
+                        <span class="company-badge-dot" style="background: ${host.companyColor}"></span>
+                        ${escapeHtml(host.companyName)}
+                    </span>
+                </td>
                 <td>${escapeHtml(host.operatingSystem || '-')}</td>
                 <td><span class="status-badge ${host.state?.toLowerCase()}">${host.state || '-'}</span></td>
                 <td>${escapeHtml(host.node || '-')}</td>
-                <td>${host.cpuCount || '-'}</td>
-                <td>${memoryDisplay}</td>
-                <td>${diskDisplay}</td>
-                <td>${escapeHtml(host.ipAddresses || '-')}</td>
+                <td class="resource-display"><span>${resources.join(' • ') || '-'}</span></td>
+                <td style="font-family: monospace; font-size: 0.85rem;">${escapeHtml(host.ipAddresses || '-')}</td>
                 <td>
                     <div class="action-btns">
                         <button class="btn-icon view" onclick="viewHost('${host.id}')" title="View">👁</button>
@@ -1071,25 +1323,9 @@ function refreshHostsTable() {
     }).join('');
 }
 
-function populateSubnetFilters() {
-    const subnets = SubnetManager.getAll();
-    const options = '<option value="">All Subnets</option>' +
-        subnets.map(s => `<option value="${s.id}">${s.network}/${s.cidr} ${s.name ? `(${s.name})` : ''}</option>`).join('');
-
-    const hostFilter = document.getElementById('hostSubnetFilter');
-    const ipFilter = document.getElementById('ipSubnetFilter');
-    const autoSubnet = document.getElementById('hostAutoSubnet');
-
-    if (hostFilter) hostFilter.innerHTML = options;
-    if (ipFilter) ipFilter.innerHTML = options;
-    if (autoSubnet) {
-        autoSubnet.innerHTML = '<option value="">-- Select Subnet --</option>' +
-            subnets.map(s => `<option value="${s.id}">${s.network}/${s.cidr} - ${s.availableCount} available</option>`).join('');
-    }
-}
-
 function filterHosts() {
     const search = document.getElementById('hostSearchInput').value.toLowerCase();
+    const companyFilter = document.getElementById('hostCompanyFilter').value;
     const stateFilter = document.getElementById('hostStateFilter').value.toLowerCase();
     const subnetFilter = document.getElementById('hostSubnetFilter').value;
 
@@ -1097,12 +1333,14 @@ function filterHosts() {
 
     rows.forEach(row => {
         const text = row.textContent.toLowerCase();
+        const company = row.dataset.company;
         const state = row.dataset.state;
         const ips = row.dataset.ips || '';
 
         let visible = true;
 
         if (search && !text.includes(search)) visible = false;
+        if (companyFilter && company !== companyFilter) visible = false;
         if (stateFilter && state !== stateFilter) visible = false;
 
         if (subnetFilter) {
@@ -1123,21 +1361,36 @@ function filterHosts() {
 function showAddHostModal() {
     document.getElementById('hostForm').reset();
     document.getElementById('hostEditId').value = '';
-    document.getElementById('ipAssignmentMethod').value = 'auto';
+
+    populateCompanySelect('hostCompany');
+
+    document.querySelector('input[name="ipMethod"][value="auto"]').checked = true;
     toggleIPAssignment();
-    populateSubnetFilters();
 
     document.querySelector('#addHostModal .modal-header h3').textContent = 'Add Host';
     openModal('addHostModal');
 }
 
+function updateHostSubnets() {
+    const companyId = document.getElementById('hostCompany').value;
+    const subnets = companyId
+        ? SubnetManager.getByCompany(companyId)
+        : SubnetManager.getAll();
+
+    const select = document.getElementById('hostAutoSubnet');
+    select.innerHTML = '<option value="">-- Select Subnet --</option>' +
+        subnets.map(s => `<option value="${s.id}">${s.network}/${s.cidr} - ${s.availableCount} available</option>`).join('');
+
+    updateNextIPPreview();
+}
+
 function toggleIPAssignment() {
-    const method = document.getElementById('ipAssignmentMethod').value;
+    const method = document.querySelector('input[name="ipMethod"]:checked').value;
     document.getElementById('autoAssignSection').style.display = method === 'auto' ? 'block' : 'none';
     document.getElementById('manualIPSection').style.display = method === 'manual' ? 'block' : 'none';
 
     if (method === 'auto') {
-        updateNextIPPreview();
+        updateHostSubnets();
     }
 }
 
@@ -1166,6 +1419,9 @@ function editHost(id) {
     const host = HostManager.getById(id);
     if (!host) return;
 
+    populateCompanySelect('hostCompany');
+
+    document.getElementById('hostCompany').value = host.companyId || '';
     document.getElementById('hostVMName').value = host.vmName || '';
     document.getElementById('hostOS').value = host.operatingSystem || '';
     document.getElementById('hostState').value = host.state || 'running';
@@ -1178,7 +1434,7 @@ function editHost(id) {
     document.getElementById('hostFavorite').value = host.favorite ? '1' : '0';
     document.getElementById('hostEditId').value = id;
 
-    document.getElementById('ipAssignmentMethod').value = 'none';
+    document.querySelector('input[name="ipMethod"][value="none"]').checked = true;
     toggleIPAssignment();
 
     document.querySelector('#addHostModal .modal-header h3').textContent = 'Edit Host';
@@ -1189,7 +1445,8 @@ function saveHost(e) {
     e.preventDefault();
 
     const id = document.getElementById('hostEditId').value;
-    const hostData = {
+    const data = {
+        companyId: document.getElementById('hostCompany').value || null,
         vmName: document.getElementById('hostVMName').value,
         operatingSystem: document.getElementById('hostOS').value,
         state: document.getElementById('hostState').value,
@@ -1202,22 +1459,21 @@ function saveHost(e) {
         favorite: document.getElementById('hostFavorite').value === '1'
     };
 
-    // Calculate available memory
-    if (hostData.memoryTotalGB && hostData.memoryUsedGB) {
-        hostData.memoryAvailableGB = parseFloat(hostData.memoryTotalGB) - parseFloat(hostData.memoryUsedGB);
+    if (data.memoryTotalGB && data.memoryUsedGB) {
+        data.memoryAvailableGB = parseFloat(data.memoryTotalGB) - parseFloat(data.memoryUsedGB);
     }
 
     let result;
     if (id) {
-        result = HostManager.update(id, hostData);
+        result = HostManager.update(id, data);
     } else {
-        const ipMethod = document.getElementById('ipAssignmentMethod').value;
+        const ipMethod = document.querySelector('input[name="ipMethod"]:checked').value;
         const ipAssignment = {
             method: ipMethod,
             subnetId: ipMethod === 'auto' ? document.getElementById('hostAutoSubnet').value : null,
             ips: ipMethod === 'manual' ? document.getElementById('hostManualIPs').value : null
         };
-        result = HostManager.add(hostData, ipAssignment);
+        result = HostManager.add(data, ipAssignment);
     }
 
     if (result.success) {
@@ -1242,6 +1498,15 @@ function viewHost(id) {
                 <div class="value">${escapeHtml(host.vmName)} ${host.favorite ? '⭐' : ''}</div>
             </div>
             <div class="detail-item">
+                <label>Company</label>
+                <div class="value">
+                    <span class="company-badge" style="background: ${host.companyColor}15; color: ${host.companyColor}">
+                        <span class="company-badge-dot" style="background: ${host.companyColor}"></span>
+                        ${escapeHtml(host.companyName)}
+                    </span>
+                </div>
+            </div>
+            <div class="detail-item">
                 <label>Operating System</label>
                 <div class="value">${escapeHtml(host.operatingSystem || '-')}</div>
             </div>
@@ -1259,19 +1524,23 @@ function viewHost(id) {
             </div>
             <div class="detail-item">
                 <label>Memory</label>
-                <div class="value">${host.memoryUsedGB || 0} / ${host.memoryTotalGB || 0} GB used</div>
+                <div class="value">${host.memoryUsedGB || 0} / ${host.memoryTotalGB || 0} GB</div>
             </div>
             <div class="detail-item">
                 <label>Disk</label>
-                <div class="value">${host.diskUsedGB || 0} / ${host.diskSizeGB || 0} GB used</div>
+                <div class="value">${host.diskUsedGB || 0} / ${host.diskSizeGB || 0} GB</div>
+            </div>
+            <div class="detail-item full-width">
+                <label>IP Addresses</label>
+                <div class="value" style="font-family: monospace;">${escapeHtml(host.ipAddresses || 'None assigned')}</div>
             </div>
             <div class="detail-item">
                 <label>Created</label>
                 <div class="value">${host.createdAt ? new Date(host.createdAt).toLocaleString() : '-'}</div>
             </div>
-            <div class="detail-item full-width">
-                <label>IP Addresses</label>
-                <div class="value">${escapeHtml(host.ipAddresses || 'None assigned')}</div>
+            <div class="detail-item">
+                <label>Last Updated</label>
+                <div class="value">${host.updatedAt ? new Date(host.updatedAt).toLocaleString() : '-'}</div>
             </div>
         </div>
     `;
@@ -1301,8 +1570,6 @@ function deleteHost(id) {
 
 function refreshIPsTable() {
     let ips = IPManager.getAll();
-
-    // Sort by IP
     ips = ips.sort((a, b) => IPUtils.ipToInt(a.ipAddress) - IPUtils.ipToInt(b.ipAddress));
 
     const tbody = document.getElementById('ipsTable').querySelector('tbody');
@@ -1313,13 +1580,20 @@ function refreshIPsTable() {
     }
 
     tbody.innerHTML = ips.map(ip => `
-        <tr data-subnet="${ip.subnetId || ''}" data-status="${ip.status}">
+        <tr data-subnet="${ip.subnetId || ''}" data-company="${ip.companyId || ''}" data-status="${ip.status}">
             <td><strong style="font-family: monospace;">${ip.ipAddress}</strong></td>
+            <td>
+                ${ip.companyName ? `
+                    <span class="company-badge" style="background: ${ip.companyColor}15; color: ${ip.companyColor}">
+                        <span class="company-badge-dot" style="background: ${ip.companyColor}"></span>
+                        ${escapeHtml(ip.companyName)}
+                    </span>
+                ` : '-'}
+            </td>
             <td>${escapeHtml(ip.subnetName || '-')}</td>
             <td><span class="status-badge ${ip.status}">${ip.status}</span></td>
             <td>${escapeHtml(ip.hostName || '-')}</td>
-            <td>${escapeHtml(ip.hostOS || '-')}</td>
-            <td>${ip.hostState ? `<span class="status-badge ${ip.hostState.toLowerCase()}">${ip.hostState}</span>` : '-'}</td>
+            <td>${ip.updatedAt ? new Date(ip.updatedAt).toLocaleDateString() : '-'}</td>
             <td>
                 <div class="action-btns">
                     ${ip.status === 'assigned'
@@ -1334,6 +1608,7 @@ function refreshIPsTable() {
 
 function filterIPs() {
     const search = document.getElementById('ipSearchInput').value.toLowerCase();
+    const companyFilter = document.getElementById('ipCompanyFilter').value;
     const subnetFilter = document.getElementById('ipSubnetFilter').value;
     const statusFilter = document.getElementById('ipStatusFilter').value;
 
@@ -1341,12 +1616,14 @@ function filterIPs() {
 
     rows.forEach(row => {
         const text = row.textContent.toLowerCase();
+        const company = row.dataset.company;
         const subnet = row.dataset.subnet;
         const status = row.dataset.status;
 
         let visible = true;
 
         if (search && !text.includes(search)) visible = false;
+        if (companyFilter && company !== companyFilter) visible = false;
         if (subnetFilter && subnet !== subnetFilter) visible = false;
         if (statusFilter && status !== statusFilter) visible = false;
 
@@ -1364,7 +1641,7 @@ function populateHostSelect() {
     const hosts = HostManager.getAll();
     const select = document.getElementById('assignHost');
     select.innerHTML = '<option value="">-- Select Host --</option>' +
-        hosts.map(h => `<option value="${h.id}">${h.vmName}</option>`).join('');
+        hosts.map(h => `<option value="${h.id}">${h.vmName} (${h.companyName})</option>`).join('');
 }
 
 function editIPAssignment(ipAddress) {
@@ -1419,7 +1696,6 @@ function releaseIP(ipAddress) {
 // Import/Export UI
 // ============================================
 
-// File upload handling
 const dropZone = document.getElementById('dropZone');
 
 if (dropZone) {
@@ -1454,9 +1730,10 @@ function processCSVFile(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
         const content = e.target.result;
+        const companyId = document.getElementById('importCompany').value || null;
         const updateExisting = document.getElementById('updateExisting').checked;
 
-        const result = CSVManager.import(content, updateExisting);
+        const result = CSVManager.import(content, companyId, updateExisting);
 
         const status = document.getElementById('importStatus');
         status.className = 'import-status success';
@@ -1482,15 +1759,16 @@ function exportToCSV() {
 
 function backupDatabase() {
     const backup = {
-        version: 1,
+        version: 2,
         timestamp: new Date().toISOString(),
+        companies: DB.get(DB.KEYS.COMPANIES),
         subnets: DB.get(DB.KEYS.SUBNETS),
         hosts: DB.get(DB.KEYS.HOSTS),
         ips: DB.get(DB.KEYS.IPS)
     };
 
     const json = JSON.stringify(backup, null, 2);
-    downloadFile(json, `ip_database_backup_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
+    downloadFile(json, `netmanager_backup_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
     showToast('Backup created successfully', 'success');
 }
 
@@ -1509,6 +1787,7 @@ function restoreDatabase(event) {
 
             if (!confirm('This will replace all current data. Continue?')) return;
 
+            DB.set(DB.KEYS.COMPANIES, backup.companies || []);
             DB.set(DB.KEYS.SUBNETS, backup.subnets);
             DB.set(DB.KEYS.HOSTS, backup.hosts);
             DB.set(DB.KEYS.IPS, backup.ips);
@@ -1533,6 +1812,50 @@ function downloadFile(content, filename, mimeType) {
     URL.revokeObjectURL(url);
 }
 
+function populateImportCompanySelect() {
+    const companies = CompanyManager.getAll();
+    const select = document.getElementById('importCompany');
+    select.innerHTML = '<option value="">-- No Company --</option>' +
+        companies.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+}
+
+// ============================================
+// Helper Functions
+// ============================================
+
+function populateCompanySelect(selectId) {
+    const companies = CompanyManager.getAll();
+    const select = document.getElementById(selectId);
+    select.innerHTML = '<option value="">-- Select Company --</option>' +
+        companies.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+}
+
+function populateCompanyFilters() {
+    const companies = CompanyManager.getAll();
+    const options = '<option value="">All Companies</option>' +
+        companies.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+    const filters = ['subnetCompanyFilter', 'hostCompanyFilter', 'ipCompanyFilter'];
+    filters.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = options;
+    });
+}
+
+function populateAllFilters() {
+    populateCompanyFilters();
+
+    const subnets = SubnetManager.getAll();
+    const subnetOptions = '<option value="">All Subnets</option>' +
+        subnets.map(s => `<option value="${s.id}">${s.network}/${s.cidr}${s.name ? ` (${s.name})` : ''}</option>`).join('');
+
+    const subnetFilters = ['hostSubnetFilter', 'ipSubnetFilter'];
+    subnetFilters.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerHTML = subnetOptions;
+    });
+}
+
 // ============================================
 // Modal Management
 // ============================================
@@ -1547,7 +1870,10 @@ function closeModal() {
     document.querySelectorAll('.modal').forEach(m => m.classList.remove('active'));
 }
 
-// Close modal on escape key
+function showQuickAddModal() {
+    openModal('quickAddModal');
+}
+
 document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') closeModal();
 });
@@ -1601,7 +1927,7 @@ document.querySelectorAll('.sortable').forEach(th => {
 });
 
 // Clear all data
-document.getElementById('clearDataBtn').addEventListener('click', () => {
+document.getElementById('clearDataBtn')?.addEventListener('click', () => {
     if (confirm('Are you sure you want to delete ALL data? This cannot be undone!')) {
         DB.clearAll();
         showToast('All data cleared', 'info');
@@ -1615,5 +1941,5 @@ document.getElementById('clearDataBtn').addEventListener('click', () => {
 
 document.addEventListener('DOMContentLoaded', () => {
     refreshDashboard();
-    console.log('IP Database initialized');
+    console.log('NetManager initialized');
 });
