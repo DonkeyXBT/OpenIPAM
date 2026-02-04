@@ -53,6 +53,12 @@
                         </svg>
                         <span>Companies</span>
                     </li>
+                    <li class="nav-item" data-page="vlans">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 3H5a2 2 0 00-2 2v4m6-6h10a2 2 0 012 2v4M9 3v18m0 0h10a2 2 0 002-2v-4M9 21H5a2 2 0 01-2-2v-4"/>
+                        </svg>
+                        <span>VLANs</span>
+                    </li>
                     <li class="nav-item" data-page="subnets">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"/>
@@ -73,12 +79,28 @@
                         </svg>
                         <span>IP Addresses</span>
                     </li>
+                    <li class="nav-item" data-page="ip-ranges">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 6h18M3 12h18M3 18h18"/>
+                            <circle cx="6" cy="6" r="2"/>
+                            <circle cx="18" cy="12" r="2"/>
+                            <circle cx="10" cy="18" r="2"/>
+                        </svg>
+                        <span>IP Ranges</span>
+                    </li>
                 </ul>
             </div>
 
             <div class="nav-section">
                 <span class="nav-section-title">Tools</span>
                 <ul class="nav-menu">
+                    <li class="nav-item" data-page="templates">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <path d="M3 9h18M9 21V9"/>
+                        </svg>
+                        <span>Subnet Templates</span>
+                    </li>
                     <li class="nav-item" data-page="import">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
@@ -129,6 +151,8 @@
                         </button>
                     </div>
                 </div>
+
+                <div id="dashboardConflicts"></div>
 
                 <div class="stats-grid">
                     <div class="stat-card gradient-blue">
@@ -458,6 +482,13 @@
                             </svg>
                             <span id="bulkEditIPsCount">Bulk Edit (0)</span>
                         </button>
+                        <button class="btn-secondary" onclick="showAddReservationModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0110 0v4"/>
+                            </svg>
+                            Reserve IP
+                        </button>
                         <button class="btn-primary" onclick="showAssignIPModal()">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <line x1="12" y1="5" x2="12" y2="19"/>
@@ -488,6 +519,8 @@
                         <option value="reserved">Reserved</option>
                     </select>
                 </div>
+                <div id="conflictsPanel" class="conflicts-panel"></div>
+
                 <div class="card">
                     <div class="card-body no-padding">
                         <table class="data-table" id="ipsTable">
@@ -495,16 +528,17 @@
                                 <tr>
                                     <th class="checkbox-col"><input type="checkbox" id="selectAllIPs" onchange="toggleAllIPs(this)"></th>
                                     <th class="sortable" data-sort="ip">IP Address</th>
+                                    <th>DNS Name</th>
                                     <th>Company</th>
                                     <th>Subnet</th>
                                     <th>Status</th>
-                                    <th>Assigned To</th>
+                                    <th>Assigned To / Reserved For</th>
                                     <th>Last Updated</th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td colspan="8" class="empty-message">No IP addresses tracked</td></tr>
+                                <tr><td colspan="9" class="empty-message">No IP addresses tracked</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -614,6 +648,94 @@
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+
+            <!-- VLANs Page -->
+            <div id="vlans" class="page">
+                <div class="page-header">
+                    <div class="page-title">
+                        <h2>VLAN Management</h2>
+                        <p class="page-description">Configure virtual LANs for network segmentation</p>
+                    </div>
+                    <button class="btn-primary" onclick="showAddVLANModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        Add VLAN
+                    </button>
+                </div>
+                <div class="card">
+                    <div class="card-body no-padding">
+                        <table class="data-table" id="vlansTable">
+                            <thead>
+                                <tr>
+                                    <th>VLAN ID</th>
+                                    <th>Name</th>
+                                    <th>Type</th>
+                                    <th>Company</th>
+                                    <th>Subnets</th>
+                                    <th>Description</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="7" class="empty-message">No VLANs configured</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- IP Ranges Page -->
+            <div id="ip-ranges" class="page">
+                <div class="page-header">
+                    <div class="page-title">
+                        <h2>IP Range Allocation</h2>
+                        <p class="page-description">Organize IP ranges by purpose (servers, printers, IoT, etc.)</p>
+                    </div>
+                    <button class="btn-primary" onclick="showAddIPRangeModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        Add IP Range
+                    </button>
+                </div>
+                <div class="card">
+                    <div class="card-body no-padding">
+                        <table class="data-table" id="ipRangesTable">
+                            <thead>
+                                <tr>
+                                    <th>Purpose</th>
+                                    <th>Name</th>
+                                    <th>Subnet</th>
+                                    <th>Start IP</th>
+                                    <th>End IP</th>
+                                    <th>Size</th>
+                                    <th>Usage</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="8" class="empty-message">No IP ranges configured</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Subnet Templates Page -->
+            <div id="templates" class="page">
+                <div class="page-header">
+                    <div class="page-title">
+                        <h2>Subnet Templates</h2>
+                        <p class="page-description">Pre-defined subnet configurations for quick deployment</p>
+                    </div>
+                </div>
+                <div class="templates-grid" id="templatesGrid">
+                    <!-- Templates will be populated by JavaScript -->
                 </div>
             </div>
         </main>
@@ -1102,6 +1224,204 @@
             <div class="form-actions">
                 <button type="button" class="btn-secondary" onclick="closeModal()">Close</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Add VLAN Modal -->
+    <div id="addVLANModal" class="modal">
+        <div class="modal-header">
+            <h3>Add VLAN</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="vlanForm" onsubmit="saveVLAN(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>VLAN ID *</label>
+                        <input type="number" id="vlanId" required placeholder="e.g., 100" min="1" max="4094">
+                    </div>
+                    <div class="form-group">
+                        <label>VLAN Name *</label>
+                        <input type="text" id="vlanName" required placeholder="e.g., Production">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Type</label>
+                        <select id="vlanType">
+                            <option value="data">Data</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Company</label>
+                        <select id="vlanCompany">
+                            <option value="">-- Select Company --</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="vlanDescription" placeholder="VLAN description..."></textarea>
+                </div>
+                <input type="hidden" id="vlanEditId">
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Save VLAN</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add IP Range Modal -->
+    <div id="addIPRangeModal" class="modal">
+        <div class="modal-header">
+            <h3>Add IP Range</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="ipRangeForm" onsubmit="saveIPRange(event)">
+                <div class="form-group">
+                    <label>Subnet *</label>
+                    <select id="ipRangeSubnet" required>
+                        <option value="">-- Select Subnet --</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Start IP *</label>
+                        <input type="text" id="ipRangeStartIP" required placeholder="e.g., 192.168.1.10">
+                    </div>
+                    <div class="form-group">
+                        <label>End IP *</label>
+                        <input type="text" id="ipRangeEndIP" required placeholder="e.g., 192.168.1.50">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Purpose *</label>
+                        <select id="ipRangePurpose" required>
+                            <option value="servers">Servers</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Name</label>
+                        <input type="text" id="ipRangeName" placeholder="e.g., Web Servers">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="ipRangeDescription" placeholder="Range description..."></textarea>
+                </div>
+                <input type="hidden" id="ipRangeEditId">
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Save IP Range</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add Reservation Modal -->
+    <div id="addReservationModal" class="modal">
+        <div class="modal-header">
+            <h3>Reserve IP Address</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="reservationForm" onsubmit="saveReservation(event)">
+                <div class="form-group">
+                    <label>IP Address *</label>
+                    <input type="text" id="reservationIP" required placeholder="e.g., 192.168.1.1">
+                </div>
+                <div class="form-group">
+                    <label>Reservation Type *</label>
+                    <select id="reservationType" required>
+                        <option value="gateway">Gateway</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>DNS Name</label>
+                    <input type="text" id="reservationDNS" placeholder="e.g., gateway.local">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="reservationDescription" placeholder="Reservation description..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Reserve IP</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit IP Modal -->
+    <div id="editIPModal" class="modal">
+        <div class="modal-header">
+            <h3>Edit IP Address</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="editIPForm" onsubmit="saveEditIP(event)">
+                <div class="form-group">
+                    <label>IP Address</label>
+                    <input type="text" id="editIPAddress" readonly>
+                </div>
+                <div class="form-group">
+                    <label>DNS Name</label>
+                    <input type="text" id="editIPDNS" placeholder="e.g., server.local">
+                </div>
+                <div class="form-group">
+                    <label>Status</label>
+                    <select id="editIPStatus">
+                        <option value="available">Available</option>
+                        <option value="assigned">Assigned</option>
+                        <option value="reserved">Reserved</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Assign to Host</label>
+                    <select id="editIPHost">
+                        <option value="">-- No Host --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Reservation Type</label>
+                    <select id="editIPReservationType">
+                        <option value="gateway">Gateway</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Reservation Description</label>
+                    <textarea id="editIPDescription" placeholder="Description..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Save Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- View Template Modal -->
+    <div id="viewTemplateModal" class="modal modal-large">
+        <div class="modal-header">
+            <h3>Template Details</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="templateDetailsContent"></div>
+        </div>
+    </div>
+
+    <!-- Apply Template Modal -->
+    <div id="applyTemplateModal" class="modal">
+        <div class="modal-header">
+            <h3>Apply Template to Subnet</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="applyTemplateContent"></div>
         </div>
     </div>
 

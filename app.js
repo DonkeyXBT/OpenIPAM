@@ -12,7 +12,11 @@ const DB = {
         COMPANIES: 'ipdb_companies',
         SUBNETS: 'ipdb_subnets',
         HOSTS: 'ipdb_hosts',
-        IPS: 'ipdb_ips'
+        IPS: 'ipdb_ips',
+        VLANS: 'ipdb_vlans',
+        IP_RANGES: 'ipdb_ip_ranges',
+        SUBNET_TEMPLATES: 'ipdb_subnet_templates',
+        RESERVATIONS: 'ipdb_reservations'
     },
 
     get(key) {
@@ -101,8 +105,588 @@ const IPUtils = {
             }
         }
         return null;
+    },
+
+    getFirstUsableIP(networkIp, cidr) {
+        const networkInt = this.ipToInt(networkIp);
+        return this.intToIp(networkInt + 1);
+    },
+
+    getLastUsableIP(networkIp, cidr) {
+        const networkInt = this.ipToInt(networkIp);
+        const totalIPs = Math.pow(2, 32 - cidr);
+        return this.intToIp(networkInt + totalIPs - 2);
     }
 };
+
+// ============================================
+// VLAN Management
+// ============================================
+
+const VLAN_TYPES = [
+    { id: 'data', name: 'Data', color: '#3b82f6' },
+    { id: 'voice', name: 'Voice', color: '#10b981' },
+    { id: 'management', name: 'Management', color: '#f59e0b' },
+    { id: 'dmz', name: 'DMZ', color: '#ef4444' },
+    { id: 'guest', name: 'Guest', color: '#8b5cf6' },
+    { id: 'iot', name: 'IoT', color: '#06b6d4' },
+    { id: 'storage', name: 'Storage', color: '#ec4899' },
+    { id: 'backup', name: 'Backup', color: '#64748b' },
+    { id: 'other', name: 'Other', color: '#6b7280' }
+];
+
+const VLANManager = {
+    getAll() {
+        const vlans = DB.get(DB.KEYS.VLANS);
+        const subnets = DB.get(DB.KEYS.SUBNETS);
+        const companies = DB.get(DB.KEYS.COMPANIES);
+
+        return vlans.map(vlan => {
+            const vlanSubnets = subnets.filter(s => s.vlanId == vlan.vlanId);
+            const company = companies.find(c => c.id === vlan.companyId);
+            const vlanType = VLAN_TYPES.find(t => t.id === vlan.type) || VLAN_TYPES.find(t => t.id === 'other');
+
+            return {
+                ...vlan,
+                subnetCount: vlanSubnets.length,
+                companyName: company ? company.name : 'Unassigned',
+                companyColor: company ? company.color : '#6b7280',
+                typeName: vlanType.name,
+                typeColor: vlanType.color
+            };
+        });
+    },
+
+    getById(id) {
+        const vlans = DB.get(DB.KEYS.VLANS);
+        return vlans.find(v => v.id === id);
+    },
+
+    getByVlanId(vlanId) {
+        const vlans = DB.get(DB.KEYS.VLANS);
+        return vlans.find(v => v.vlanId == vlanId);
+    },
+
+    add(data) {
+        const vlans = DB.get(DB.KEYS.VLANS);
+
+        const exists = vlans.some(v => v.vlanId == data.vlanId);
+        if (exists) {
+            return { success: false, message: 'VLAN ID already exists' };
+        }
+
+        const newVLAN = {
+            id: DB.generateId(),
+            vlanId: parseInt(data.vlanId),
+            name: data.name,
+            description: data.description || '',
+            type: data.type || 'data',
+            companyId: data.companyId || null,
+            createdAt: new Date().toISOString()
+        };
+
+        vlans.push(newVLAN);
+        DB.set(DB.KEYS.VLANS, vlans);
+
+        return { success: true, message: 'VLAN added successfully', vlan: newVLAN };
+    },
+
+    update(id, updates) {
+        const vlans = DB.get(DB.KEYS.VLANS);
+        const index = vlans.findIndex(v => v.id === id);
+
+        if (index === -1) {
+            return { success: false, message: 'VLAN not found' };
+        }
+
+        vlans[index] = { ...vlans[index], ...updates, updatedAt: new Date().toISOString() };
+        DB.set(DB.KEYS.VLANS, vlans);
+
+        return { success: true, message: 'VLAN updated successfully' };
+    },
+
+    delete(id) {
+        const vlans = DB.get(DB.KEYS.VLANS);
+        const vlan = vlans.find(v => v.id === id);
+        if (!vlan) {
+            return { success: false, message: 'VLAN not found' };
+        }
+
+        const subnets = DB.get(DB.KEYS.SUBNETS);
+        const hasSubnets = subnets.some(s => s.vlanId == vlan.vlanId);
+
+        if (hasSubnets) {
+            return { success: false, message: 'Cannot delete VLAN with associated subnets' };
+        }
+
+        const newVLANs = vlans.filter(v => v.id !== id);
+        DB.set(DB.KEYS.VLANS, newVLANs);
+
+        return { success: true, message: 'VLAN deleted successfully' };
+    }
+};
+
+// ============================================
+// IP Range Allocation Management
+// ============================================
+
+const RANGE_PURPOSES = [
+    { id: 'servers', name: 'Servers', icon: '🖥️', color: '#3b82f6' },
+    { id: 'workstations', name: 'Workstations', icon: '💻', color: '#10b981' },
+    { id: 'printers', name: 'Printers', icon: '🖨️', color: '#f59e0b' },
+    { id: 'iot', name: 'IoT Devices', icon: '📡', color: '#06b6d4' },
+    { id: 'voip', name: 'VoIP Phones', icon: '📞', color: '#8b5cf6' },
+    { id: 'cameras', name: 'Cameras/NVR', icon: '📷', color: '#64748b' },
+    { id: 'network', name: 'Network Equipment', icon: '🔌', color: '#ef4444' },
+    { id: 'dhcp', name: 'DHCP Pool', icon: '🔄', color: '#14b8a6' },
+    { id: 'static', name: 'Static Assignments', icon: '📌', color: '#ec4899' },
+    { id: 'reserved', name: 'Reserved', icon: '🔒', color: '#6b7280' },
+    { id: 'other', name: 'Other', icon: '📦', color: '#475569' }
+];
+
+const IPRangeManager = {
+    getAll() {
+        const ranges = DB.get(DB.KEYS.IP_RANGES);
+        const subnets = DB.get(DB.KEYS.SUBNETS);
+        const ips = DB.get(DB.KEYS.IPS);
+
+        return ranges.map(range => {
+            const subnet = subnets.find(s => s.id === range.subnetId);
+            const purpose = RANGE_PURPOSES.find(p => p.id === range.purpose) || RANGE_PURPOSES.find(p => p.id === 'other');
+
+            // Calculate usage
+            const startInt = IPUtils.ipToInt(range.startIP);
+            const endInt = IPUtils.ipToInt(range.endIP);
+            const totalIPs = endInt - startInt + 1;
+
+            const usedIPs = ips.filter(ip => {
+                const ipInt = IPUtils.ipToInt(ip.ipAddress);
+                return ipInt >= startInt && ipInt <= endInt && ip.status !== 'available';
+            }).length;
+
+            return {
+                ...range,
+                subnetName: subnet ? `${subnet.network}/${subnet.cidr}` : 'Unknown',
+                subnetNetwork: subnet?.network,
+                subnetCidr: subnet?.cidr,
+                purposeName: purpose.name,
+                purposeIcon: purpose.icon,
+                purposeColor: purpose.color,
+                totalIPs,
+                usedIPs,
+                availableIPs: totalIPs - usedIPs
+            };
+        });
+    },
+
+    getBySubnetId(subnetId) {
+        return this.getAll().filter(r => r.subnetId === subnetId);
+    },
+
+    getById(id) {
+        const ranges = DB.get(DB.KEYS.IP_RANGES);
+        return ranges.find(r => r.id === id);
+    },
+
+    add(data) {
+        const ranges = DB.get(DB.KEYS.IP_RANGES);
+
+        if (!IPUtils.isValidIP(data.startIP) || !IPUtils.isValidIP(data.endIP)) {
+            return { success: false, message: 'Invalid IP address' };
+        }
+
+        const startInt = IPUtils.ipToInt(data.startIP);
+        const endInt = IPUtils.ipToInt(data.endIP);
+
+        if (startInt > endInt) {
+            return { success: false, message: 'Start IP must be before End IP' };
+        }
+
+        // Check for overlapping ranges in same subnet
+        const existingRanges = ranges.filter(r => r.subnetId === data.subnetId);
+        for (const existing of existingRanges) {
+            const exStartInt = IPUtils.ipToInt(existing.startIP);
+            const exEndInt = IPUtils.ipToInt(existing.endIP);
+
+            if ((startInt >= exStartInt && startInt <= exEndInt) ||
+                (endInt >= exStartInt && endInt <= exEndInt) ||
+                (startInt <= exStartInt && endInt >= exEndInt)) {
+                return { success: false, message: 'IP range overlaps with existing range' };
+            }
+        }
+
+        const newRange = {
+            id: DB.generateId(),
+            subnetId: data.subnetId,
+            startIP: data.startIP,
+            endIP: data.endIP,
+            purpose: data.purpose || 'other',
+            name: data.name || '',
+            description: data.description || '',
+            createdAt: new Date().toISOString()
+        };
+
+        ranges.push(newRange);
+        DB.set(DB.KEYS.IP_RANGES, ranges);
+
+        return { success: true, message: 'IP range added successfully', range: newRange };
+    },
+
+    update(id, updates) {
+        const ranges = DB.get(DB.KEYS.IP_RANGES);
+        const index = ranges.findIndex(r => r.id === id);
+
+        if (index === -1) {
+            return { success: false, message: 'IP range not found' };
+        }
+
+        ranges[index] = { ...ranges[index], ...updates, updatedAt: new Date().toISOString() };
+        DB.set(DB.KEYS.IP_RANGES, ranges);
+
+        return { success: true, message: 'IP range updated successfully' };
+    },
+
+    delete(id) {
+        const ranges = DB.get(DB.KEYS.IP_RANGES);
+        const newRanges = ranges.filter(r => r.id !== id);
+        DB.set(DB.KEYS.IP_RANGES, newRanges);
+
+        return { success: true, message: 'IP range deleted successfully' };
+    }
+};
+
+// ============================================
+// Subnet Templates Management
+// ============================================
+
+const DEFAULT_TEMPLATES = [
+    {
+        id: 'small_office',
+        name: 'Small Office',
+        description: 'Small office network (254 hosts)',
+        cidr: 24,
+        vlanType: 'data',
+        ranges: [
+            { startOffset: 1, endOffset: 10, purpose: 'network', name: 'Network Infrastructure' },
+            { startOffset: 11, endOffset: 50, purpose: 'servers', name: 'Servers' },
+            { startOffset: 51, endOffset: 200, purpose: 'dhcp', name: 'DHCP Pool' },
+            { startOffset: 201, endOffset: 230, purpose: 'printers', name: 'Printers' },
+            { startOffset: 231, endOffset: 254, purpose: 'reserved', name: 'Reserved' }
+        ],
+        reservations: [
+            { offset: 1, type: 'gateway', description: 'Default Gateway' },
+            { offset: 2, type: 'dns', description: 'Primary DNS' },
+            { offset: 3, type: 'dns', description: 'Secondary DNS' }
+        ]
+    },
+    {
+        id: 'datacenter',
+        name: 'Datacenter',
+        description: 'Server network (254 hosts)',
+        cidr: 24,
+        vlanType: 'data',
+        ranges: [
+            { startOffset: 1, endOffset: 5, purpose: 'network', name: 'Network Infrastructure' },
+            { startOffset: 6, endOffset: 200, purpose: 'servers', name: 'Servers' },
+            { startOffset: 201, endOffset: 250, purpose: 'static', name: 'Static IPs' },
+            { startOffset: 251, endOffset: 254, purpose: 'reserved', name: 'Reserved' }
+        ],
+        reservations: [
+            { offset: 1, type: 'gateway', description: 'Default Gateway' }
+        ]
+    },
+    {
+        id: 'iot_network',
+        name: 'IoT Network',
+        description: 'IoT devices network (254 hosts)',
+        cidr: 24,
+        vlanType: 'iot',
+        ranges: [
+            { startOffset: 1, endOffset: 5, purpose: 'network', name: 'Network Infrastructure' },
+            { startOffset: 6, endOffset: 50, purpose: 'cameras', name: 'Cameras' },
+            { startOffset: 51, endOffset: 150, purpose: 'iot', name: 'IoT Devices' },
+            { startOffset: 151, endOffset: 200, purpose: 'dhcp', name: 'DHCP Pool' },
+            { startOffset: 201, endOffset: 254, purpose: 'reserved', name: 'Reserved' }
+        ],
+        reservations: [
+            { offset: 1, type: 'gateway', description: 'Default Gateway' }
+        ]
+    },
+    {
+        id: 'voice_network',
+        name: 'Voice/VoIP',
+        description: 'VoIP network (254 hosts)',
+        cidr: 24,
+        vlanType: 'voice',
+        ranges: [
+            { startOffset: 1, endOffset: 5, purpose: 'network', name: 'Network Infrastructure' },
+            { startOffset: 6, endOffset: 200, purpose: 'voip', name: 'VoIP Phones' },
+            { startOffset: 201, endOffset: 254, purpose: 'reserved', name: 'Reserved' }
+        ],
+        reservations: [
+            { offset: 1, type: 'gateway', description: 'Default Gateway' }
+        ]
+    },
+    {
+        id: 'dmz',
+        name: 'DMZ',
+        description: 'DMZ for public services (62 hosts)',
+        cidr: 26,
+        vlanType: 'dmz',
+        ranges: [
+            { startOffset: 1, endOffset: 5, purpose: 'network', name: 'Network Infrastructure' },
+            { startOffset: 6, endOffset: 50, purpose: 'servers', name: 'Public Servers' },
+            { startOffset: 51, endOffset: 62, purpose: 'reserved', name: 'Reserved' }
+        ],
+        reservations: [
+            { offset: 1, type: 'gateway', description: 'Default Gateway' },
+            { offset: 2, type: 'firewall', description: 'Firewall' }
+        ]
+    },
+    {
+        id: 'guest',
+        name: 'Guest Network',
+        description: 'Guest WiFi network (254 hosts)',
+        cidr: 24,
+        vlanType: 'guest',
+        ranges: [
+            { startOffset: 1, endOffset: 5, purpose: 'network', name: 'Network Infrastructure' },
+            { startOffset: 6, endOffset: 250, purpose: 'dhcp', name: 'DHCP Pool' },
+            { startOffset: 251, endOffset: 254, purpose: 'reserved', name: 'Reserved' }
+        ],
+        reservations: [
+            { offset: 1, type: 'gateway', description: 'Default Gateway' }
+        ]
+    }
+];
+
+const SubnetTemplateManager = {
+    getAll() {
+        const customTemplates = DB.get(DB.KEYS.SUBNET_TEMPLATES);
+        return [...DEFAULT_TEMPLATES, ...customTemplates];
+    },
+
+    getById(id) {
+        return this.getAll().find(t => t.id === id);
+    },
+
+    add(data) {
+        const templates = DB.get(DB.KEYS.SUBNET_TEMPLATES);
+
+        const newTemplate = {
+            id: DB.generateId(),
+            name: data.name,
+            description: data.description || '',
+            cidr: parseInt(data.cidr),
+            vlanType: data.vlanType || 'data',
+            ranges: data.ranges || [],
+            reservations: data.reservations || [],
+            isCustom: true,
+            createdAt: new Date().toISOString()
+        };
+
+        templates.push(newTemplate);
+        DB.set(DB.KEYS.SUBNET_TEMPLATES, templates);
+
+        return { success: true, message: 'Template added successfully', template: newTemplate };
+    },
+
+    delete(id) {
+        // Can only delete custom templates
+        const templates = DB.get(DB.KEYS.SUBNET_TEMPLATES);
+        const template = templates.find(t => t.id === id);
+
+        if (!template) {
+            return { success: false, message: 'Template not found or is a default template' };
+        }
+
+        const newTemplates = templates.filter(t => t.id !== id);
+        DB.set(DB.KEYS.SUBNET_TEMPLATES, newTemplates);
+
+        return { success: true, message: 'Template deleted successfully' };
+    },
+
+    applyTemplate(templateId, subnetId) {
+        const template = this.getById(templateId);
+        const subnet = SubnetManager.getById(subnetId);
+
+        if (!template || !subnet) {
+            return { success: false, message: 'Template or subnet not found' };
+        }
+
+        const networkInt = IPUtils.ipToInt(subnet.network);
+        const results = { ranges: 0, reservations: 0 };
+
+        // Create IP ranges from template
+        if (template.ranges) {
+            template.ranges.forEach(range => {
+                const startIP = IPUtils.intToIp(networkInt + range.startOffset);
+                const endIP = IPUtils.intToIp(networkInt + range.endOffset);
+
+                const result = IPRangeManager.add({
+                    subnetId: subnetId,
+                    startIP: startIP,
+                    endIP: endIP,
+                    purpose: range.purpose,
+                    name: range.name,
+                    description: range.description || ''
+                });
+
+                if (result.success) results.ranges++;
+            });
+        }
+
+        // Create reservations from template
+        if (template.reservations) {
+            template.reservations.forEach(res => {
+                const ip = IPUtils.intToIp(networkInt + res.offset);
+
+                const result = IPManager.updateStatus(ip, 'reserved', null);
+                if (result.success) {
+                    // Update IP with reservation info
+                    const ips = DB.get(DB.KEYS.IPS);
+                    const ipRecord = ips.find(i => i.ipAddress === ip);
+                    if (ipRecord) {
+                        ipRecord.reservationType = res.type;
+                        ipRecord.reservationDescription = res.description;
+                        DB.set(DB.KEYS.IPS, ips);
+                    }
+                    results.reservations++;
+                }
+            });
+        }
+
+        return {
+            success: true,
+            message: `Template applied: ${results.ranges} ranges, ${results.reservations} reservations created`
+        };
+    }
+};
+
+// ============================================
+// IP Conflict Detection
+// ============================================
+
+const ConflictDetector = {
+    checkForConflicts() {
+        const ips = DB.get(DB.KEYS.IPS);
+        const hosts = DB.get(DB.KEYS.HOSTS);
+        const conflicts = [];
+
+        // Group IPs by address
+        const ipGroups = {};
+        ips.forEach(ip => {
+            if (!ipGroups[ip.ipAddress]) {
+                ipGroups[ip.ipAddress] = [];
+            }
+            ipGroups[ip.ipAddress].push(ip);
+        });
+
+        // Find duplicates
+        Object.entries(ipGroups).forEach(([ipAddress, records]) => {
+            const assignedRecords = records.filter(r => r.status === 'assigned' && r.hostId);
+
+            if (assignedRecords.length > 1) {
+                const hostNames = assignedRecords.map(r => {
+                    const host = hosts.find(h => h.id === r.hostId);
+                    return host ? host.vmName : 'Unknown';
+                });
+
+                conflicts.push({
+                    type: 'duplicate',
+                    ipAddress,
+                    message: `IP ${ipAddress} is assigned to multiple hosts`,
+                    hosts: hostNames,
+                    severity: 'high'
+                });
+            }
+        });
+
+        // Check for IPs outside their subnets
+        const subnets = DB.get(DB.KEYS.SUBNETS);
+        ips.forEach(ip => {
+            if (ip.subnetId) {
+                const subnet = subnets.find(s => s.id === ip.subnetId);
+                if (subnet && !IPUtils.isIPInSubnet(ip.ipAddress, subnet.network, subnet.cidr)) {
+                    conflicts.push({
+                        type: 'subnet_mismatch',
+                        ipAddress: ip.ipAddress,
+                        message: `IP ${ip.ipAddress} is assigned to subnet ${subnet.network}/${subnet.cidr} but is not within range`,
+                        severity: 'medium'
+                    });
+                }
+            }
+        });
+
+        // Check for gateway/broadcast assignments
+        subnets.forEach(subnet => {
+            const networkIP = subnet.network;
+            const broadcastIP = IPUtils.getBroadcastAddress(subnet.network, subnet.cidr);
+
+            ips.forEach(ip => {
+                if (ip.status === 'assigned' && ip.hostId) {
+                    if (ip.ipAddress === networkIP) {
+                        conflicts.push({
+                            type: 'network_address',
+                            ipAddress: ip.ipAddress,
+                            message: `Network address ${ip.ipAddress} should not be assigned to a host`,
+                            severity: 'high'
+                        });
+                    }
+                    if (ip.ipAddress === broadcastIP) {
+                        conflicts.push({
+                            type: 'broadcast_address',
+                            ipAddress: ip.ipAddress,
+                            message: `Broadcast address ${ip.ipAddress} should not be assigned to a host`,
+                            severity: 'high'
+                        });
+                    }
+                }
+            });
+        });
+
+        return conflicts;
+    },
+
+    checkIPConflict(ipAddress, excludeHostId = null) {
+        const ips = DB.get(DB.KEYS.IPS);
+        const existing = ips.find(ip =>
+            ip.ipAddress === ipAddress &&
+            ip.status === 'assigned' &&
+            ip.hostId &&
+            ip.hostId !== excludeHostId
+        );
+
+        if (existing) {
+            const hosts = DB.get(DB.KEYS.HOSTS);
+            const host = hosts.find(h => h.id === existing.hostId);
+            return {
+                hasConflict: true,
+                message: `IP already assigned to ${host ? host.vmName : 'unknown host'}`,
+                hostId: existing.hostId,
+                hostName: host ? host.vmName : 'Unknown'
+            };
+        }
+
+        return { hasConflict: false };
+    }
+};
+
+// ============================================
+// Reservation Types
+// ============================================
+
+const RESERVATION_TYPES = [
+    { id: 'gateway', name: 'Gateway', icon: '🚪', color: '#ef4444' },
+    { id: 'dns', name: 'DNS Server', icon: '🔍', color: '#3b82f6' },
+    { id: 'dhcp', name: 'DHCP Server', icon: '🔄', color: '#10b981' },
+    { id: 'firewall', name: 'Firewall', icon: '🛡️', color: '#f59e0b' },
+    { id: 'switch', name: 'Switch/Router', icon: '🔌', color: '#8b5cf6' },
+    { id: 'ap', name: 'Access Point', icon: '📶', color: '#06b6d4' },
+    { id: 'management', name: 'Management', icon: '⚙️', color: '#64748b' },
+    { id: 'future', name: 'Future Use', icon: '🔮', color: '#ec4899' },
+    { id: 'other', name: 'Other', icon: '📌', color: '#6b7280' }
+];
 
 // ============================================
 // Company Management
@@ -319,6 +903,7 @@ const IPManager = {
             const host = ip.hostId ? hosts.find(h => h.id === ip.hostId) : null;
             const subnet = ip.subnetId ? subnets.find(s => s.id === ip.subnetId) : null;
             const company = subnet?.companyId ? companies.find(c => c.id === subnet.companyId) : null;
+            const reservationType = ip.reservationType ? RESERVATION_TYPES.find(t => t.id === ip.reservationType) : null;
 
             return {
                 ...ip,
@@ -328,7 +913,10 @@ const IPManager = {
                 subnetName: subnet ? `${subnet.network}/${subnet.cidr}` : null,
                 companyId: subnet?.companyId || null,
                 companyName: company ? company.name : null,
-                companyColor: company ? company.color : '#6b7280'
+                companyColor: company ? company.color : '#6b7280',
+                reservationTypeName: reservationType?.name || null,
+                reservationTypeIcon: reservationType?.icon || null,
+                reservationTypeColor: reservationType?.color || null
             };
         });
     },
@@ -1803,7 +2391,7 @@ function refreshIPsTable() {
     const tbody = document.getElementById('ipsTable').querySelector('tbody');
 
     if (ips.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="empty-message">No IP addresses tracked</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="empty-message">No IP addresses tracked</td></tr>';
         selectedIPs.clear();
         updateBulkEditIPsButton();
         return;
@@ -1811,10 +2399,29 @@ function refreshIPsTable() {
 
     tbody.innerHTML = ips.map(ip => {
         const isSelected = selectedIPs.has(ip.ipAddress);
+
+        // Build assigned to / reserved for cell
+        let assignedCell = '-';
+        if (ip.status === 'assigned' && ip.hostName) {
+            assignedCell = escapeHtml(ip.hostName);
+        } else if (ip.status === 'reserved') {
+            if (ip.reservationTypeName) {
+                assignedCell = `<span class="reservation-badge" style="background: ${ip.reservationTypeColor}15; color: ${ip.reservationTypeColor}">
+                    ${ip.reservationTypeIcon || '📌'} ${ip.reservationTypeName}
+                </span>`;
+                if (ip.reservationDescription) {
+                    assignedCell += `<br><small class="text-muted">${escapeHtml(ip.reservationDescription)}</small>`;
+                }
+            } else {
+                assignedCell = '<span class="text-muted">Reserved</span>';
+            }
+        }
+
         return `
         <tr data-ip="${ip.ipAddress}" data-subnet="${ip.subnetId || ''}" data-company="${ip.companyId || ''}" data-status="${ip.status}" class="${isSelected ? 'selected' : ''}">
             <td><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleIPSelection('${ip.ipAddress}', this)"></td>
             <td><strong style="font-family: monospace;">${ip.ipAddress}</strong></td>
+            <td style="font-family: monospace; font-size: 0.85em; color: var(--text-secondary);">${escapeHtml(ip.dnsName || '-')}</td>
             <td>
                 ${ip.companyName ? `
                     <span class="company-badge" style="background: ${ip.companyColor}15; color: ${ip.companyColor}">
@@ -1825,10 +2432,11 @@ function refreshIPsTable() {
             </td>
             <td>${escapeHtml(ip.subnetName || '-')}</td>
             <td><span class="status-badge ${ip.status}">${ip.status}</span></td>
-            <td>${escapeHtml(ip.hostName || '-')}</td>
+            <td>${assignedCell}</td>
             <td>${ip.updatedAt ? new Date(ip.updatedAt).toLocaleDateString() : '-'}</td>
             <td>
                 <div class="action-btns">
+                    <button class="btn-icon edit" onclick="showEditIPModal('${ip.ipAddress}')" title="Edit">✏️</button>
                     ${ip.status === 'assigned'
                         ? `<button class="btn-icon delete" onclick="releaseIP('${ip.ipAddress}')" title="Release">🔓</button>`
                         : `<button class="btn-icon edit" onclick="editIPAssignment('${ip.ipAddress}')" title="Assign">🔗</button>`
@@ -1994,12 +2602,16 @@ function exportToCSV() {
 
 function backupDatabase() {
     const backup = {
-        version: 2,
+        version: 3,
         timestamp: new Date().toISOString(),
         companies: DB.get(DB.KEYS.COMPANIES),
         subnets: DB.get(DB.KEYS.SUBNETS),
         hosts: DB.get(DB.KEYS.HOSTS),
-        ips: DB.get(DB.KEYS.IPS)
+        ips: DB.get(DB.KEYS.IPS),
+        vlans: DB.get(DB.KEYS.VLANS),
+        ipRanges: DB.get(DB.KEYS.IP_RANGES),
+        subnetTemplates: DB.get(DB.KEYS.SUBNET_TEMPLATES),
+        reservations: DB.get(DB.KEYS.RESERVATIONS)
     };
 
     const json = JSON.stringify(backup, null, 2);
@@ -2026,6 +2638,10 @@ function restoreDatabase(event) {
             DB.set(DB.KEYS.SUBNETS, backup.subnets);
             DB.set(DB.KEYS.HOSTS, backup.hosts);
             DB.set(DB.KEYS.IPS, backup.ips);
+            DB.set(DB.KEYS.VLANS, backup.vlans || []);
+            DB.set(DB.KEYS.IP_RANGES, backup.ipRanges || []);
+            DB.set(DB.KEYS.SUBNET_TEMPLATES, backup.subnetTemplates || []);
+            DB.set(DB.KEYS.RESERVATIONS, backup.reservations || []);
 
             showToast('Database restored successfully', 'success');
             navigateTo('dashboard');
@@ -2487,6 +3103,688 @@ function bulkReleaseIPs() {
 }
 
 // ============================================
+// VLAN UI Functions
+// ============================================
+
+function refreshVLANsTable() {
+    const vlans = VLANManager.getAll();
+    const tbody = document.getElementById('vlansTable')?.querySelector('tbody');
+
+    if (!tbody) return;
+
+    if (vlans.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-message">No VLANs configured</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = vlans.map(vlan => `
+        <tr>
+            <td><strong>${vlan.vlanId}</strong></td>
+            <td>${escapeHtml(vlan.name)}</td>
+            <td>
+                <span class="status-badge" style="background: ${vlan.typeColor}15; color: ${vlan.typeColor}">
+                    ${vlan.typeName}
+                </span>
+            </td>
+            <td>
+                <span class="company-badge" style="background: ${vlan.companyColor}15; color: ${vlan.companyColor}">
+                    <span class="company-badge-dot" style="background: ${vlan.companyColor}"></span>
+                    ${escapeHtml(vlan.companyName)}
+                </span>
+            </td>
+            <td>${vlan.subnetCount} subnets</td>
+            <td>${escapeHtml(vlan.description || '-')}</td>
+            <td>
+                <div class="action-btns">
+                    <button class="btn-icon edit" onclick="editVLAN('${vlan.id}')" title="Edit">✏️</button>
+                    <button class="btn-icon delete" onclick="deleteVLAN('${vlan.id}')" title="Delete">🗑️</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function showAddVLANModal() {
+    document.getElementById('vlanForm').reset();
+    document.getElementById('vlanEditId').value = '';
+    populateCompanySelect('vlanCompany');
+    populateVLANTypeSelect('vlanType');
+    document.querySelector('#addVLANModal .modal-header h3').textContent = 'Add VLAN';
+    openModal('addVLANModal');
+}
+
+function populateVLANTypeSelect(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = VLAN_TYPES.map(type =>
+        `<option value="${type.id}">${type.name}</option>`
+    ).join('');
+}
+
+function editVLAN(id) {
+    const vlan = VLANManager.getById(id);
+    if (!vlan) return;
+
+    populateCompanySelect('vlanCompany');
+    populateVLANTypeSelect('vlanType');
+
+    document.getElementById('vlanId').value = vlan.vlanId;
+    document.getElementById('vlanName').value = vlan.name || '';
+    document.getElementById('vlanType').value = vlan.type || 'data';
+    document.getElementById('vlanCompany').value = vlan.companyId || '';
+    document.getElementById('vlanDescription').value = vlan.description || '';
+    document.getElementById('vlanEditId').value = id;
+
+    document.querySelector('#addVLANModal .modal-header h3').textContent = 'Edit VLAN';
+    openModal('addVLANModal');
+}
+
+function saveVLAN(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('vlanEditId').value;
+    const data = {
+        vlanId: document.getElementById('vlanId').value,
+        name: document.getElementById('vlanName').value,
+        type: document.getElementById('vlanType').value,
+        companyId: document.getElementById('vlanCompany').value || null,
+        description: document.getElementById('vlanDescription').value
+    };
+
+    let result;
+    if (id) {
+        result = VLANManager.update(id, data);
+    } else {
+        result = VLANManager.add(data);
+    }
+
+    if (result.success) {
+        showToast(result.message, 'success');
+        closeModal();
+        refreshVLANsTable();
+        refreshDashboard();
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+function deleteVLAN(id) {
+    const vlan = VLANManager.getById(id);
+    if (!vlan) return;
+
+    if (!confirm(`Delete VLAN ${vlan.vlanId} (${vlan.name})?`)) return;
+
+    const result = VLANManager.delete(id);
+    if (result.success) {
+        showToast(result.message, 'success');
+        refreshVLANsTable();
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+// ============================================
+// IP Range UI Functions
+// ============================================
+
+function refreshIPRangesTable() {
+    const ranges = IPRangeManager.getAll();
+    const tbody = document.getElementById('ipRangesTable')?.querySelector('tbody');
+
+    if (!tbody) return;
+
+    if (ranges.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-message">No IP ranges configured</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = ranges.map(range => {
+        const usage = range.totalIPs > 0 ? Math.round((range.usedIPs / range.totalIPs) * 100) : 0;
+        const barClass = usage >= 90 ? 'high' : usage >= 70 ? 'medium' : 'low';
+
+        return `
+        <tr data-subnet="${range.subnetId}">
+            <td>
+                <span style="background: ${range.purposeColor}15; color: ${range.purposeColor}; padding: 4px 8px; border-radius: 4px;">
+                    ${range.purposeIcon} ${range.purposeName}
+                </span>
+            </td>
+            <td>${escapeHtml(range.name || '-')}</td>
+            <td style="font-family: monospace;">${range.subnetName}</td>
+            <td style="font-family: monospace;">${range.startIP}</td>
+            <td style="font-family: monospace;">${range.endIP}</td>
+            <td>${range.totalIPs} IPs</td>
+            <td>
+                <div class="usage-bar-container">
+                    <div class="usage-bar">
+                        <div class="usage-bar-fill ${barClass}" style="width: ${usage}%"></div>
+                    </div>
+                    <span class="usage-text">${range.usedIPs}/${range.totalIPs}</span>
+                </div>
+            </td>
+            <td>
+                <div class="action-btns">
+                    <button class="btn-icon edit" onclick="editIPRange('${range.id}')" title="Edit">✏️</button>
+                    <button class="btn-icon delete" onclick="deleteIPRange('${range.id}')" title="Delete">🗑️</button>
+                </div>
+            </td>
+        </tr>
+    `}).join('');
+}
+
+function showAddIPRangeModal() {
+    document.getElementById('ipRangeForm').reset();
+    document.getElementById('ipRangeEditId').value = '';
+    populateSubnetSelect('ipRangeSubnet');
+    populateRangePurposeSelect('ipRangePurpose');
+    document.querySelector('#addIPRangeModal .modal-header h3').textContent = 'Add IP Range';
+    openModal('addIPRangeModal');
+}
+
+function populateSubnetSelect(selectId) {
+    const subnets = SubnetManager.getAll();
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = '<option value="">-- Select Subnet --</option>' +
+        subnets.map(s => `<option value="${s.id}">${s.network}/${s.cidr}${s.name ? ` (${s.name})` : ''}</option>`).join('');
+}
+
+function populateRangePurposeSelect(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = RANGE_PURPOSES.map(p =>
+        `<option value="${p.id}">${p.icon} ${p.name}</option>`
+    ).join('');
+}
+
+function editIPRange(id) {
+    const range = IPRangeManager.getById(id);
+    if (!range) return;
+
+    populateSubnetSelect('ipRangeSubnet');
+    populateRangePurposeSelect('ipRangePurpose');
+
+    document.getElementById('ipRangeSubnet').value = range.subnetId || '';
+    document.getElementById('ipRangeStartIP').value = range.startIP;
+    document.getElementById('ipRangeEndIP').value = range.endIP;
+    document.getElementById('ipRangePurpose').value = range.purpose || 'other';
+    document.getElementById('ipRangeName').value = range.name || '';
+    document.getElementById('ipRangeDescription').value = range.description || '';
+    document.getElementById('ipRangeEditId').value = id;
+
+    document.querySelector('#addIPRangeModal .modal-header h3').textContent = 'Edit IP Range';
+    openModal('addIPRangeModal');
+}
+
+function saveIPRange(e) {
+    e.preventDefault();
+
+    const id = document.getElementById('ipRangeEditId').value;
+    const data = {
+        subnetId: document.getElementById('ipRangeSubnet').value,
+        startIP: document.getElementById('ipRangeStartIP').value,
+        endIP: document.getElementById('ipRangeEndIP').value,
+        purpose: document.getElementById('ipRangePurpose').value,
+        name: document.getElementById('ipRangeName').value,
+        description: document.getElementById('ipRangeDescription').value
+    };
+
+    let result;
+    if (id) {
+        result = IPRangeManager.update(id, data);
+    } else {
+        result = IPRangeManager.add(data);
+    }
+
+    if (result.success) {
+        showToast(result.message, 'success');
+        closeModal();
+        refreshIPRangesTable();
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+function deleteIPRange(id) {
+    if (!confirm('Delete this IP range?')) return;
+
+    const result = IPRangeManager.delete(id);
+    if (result.success) {
+        showToast(result.message, 'success');
+        refreshIPRangesTable();
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+// ============================================
+// Subnet Templates UI Functions
+// ============================================
+
+function refreshTemplatesGrid() {
+    const templates = SubnetTemplateManager.getAll();
+    const grid = document.getElementById('templatesGrid');
+
+    if (!grid) return;
+
+    grid.innerHTML = templates.map(template => {
+        const vlanType = VLAN_TYPES.find(t => t.id === template.vlanType) || VLAN_TYPES[0];
+        return `
+        <div class="template-card" onclick="viewTemplate('${template.id}')">
+            <div class="template-card-header" style="background: ${vlanType.color}">
+                <h4>${escapeHtml(template.name)}</h4>
+                ${template.isCustom ? '<span class="template-badge">Custom</span>' : ''}
+            </div>
+            <div class="template-card-body">
+                <p>${escapeHtml(template.description)}</p>
+                <div class="template-stats">
+                    <span>/${template.cidr} CIDR</span>
+                    <span>${template.ranges?.length || 0} ranges</span>
+                    <span>${template.reservations?.length || 0} reservations</span>
+                </div>
+            </div>
+            <div class="template-card-actions">
+                <button class="btn-secondary" onclick="event.stopPropagation(); applyTemplateToSubnet('${template.id}')">Apply to Subnet</button>
+                ${template.isCustom ? `<button class="btn-icon delete" onclick="event.stopPropagation(); deleteTemplate('${template.id}')" title="Delete">🗑️</button>` : ''}
+            </div>
+        </div>
+    `}).join('');
+}
+
+function viewTemplate(templateId) {
+    const template = SubnetTemplateManager.getById(templateId);
+    if (!template) return;
+
+    const vlanType = VLAN_TYPES.find(t => t.id === template.vlanType) || VLAN_TYPES[0];
+
+    const content = document.getElementById('templateDetailsContent');
+    content.innerHTML = `
+        <div class="template-detail-header" style="background: ${vlanType.color}20; border-left: 4px solid ${vlanType.color};">
+            <h4>${escapeHtml(template.name)}</h4>
+            <p>${escapeHtml(template.description)}</p>
+            <div class="template-meta">
+                <span>CIDR: /${template.cidr}</span>
+                <span>VLAN Type: ${vlanType.name}</span>
+            </div>
+        </div>
+
+        <h5 style="margin: 20px 0 12px;">IP Ranges</h5>
+        <div class="template-ranges">
+            ${template.ranges?.map(range => {
+                const purpose = RANGE_PURPOSES.find(p => p.id === range.purpose) || RANGE_PURPOSES[10];
+                return `
+                <div class="template-range-item" style="border-left: 4px solid ${purpose.color};">
+                    <span class="range-purpose">${purpose.icon} ${range.name || purpose.name}</span>
+                    <span class="range-offsets">.${range.startOffset} - .${range.endOffset}</span>
+                </div>
+            `}).join('') || '<p class="empty-state">No ranges defined</p>'}
+        </div>
+
+        <h5 style="margin: 20px 0 12px;">Reserved IPs</h5>
+        <div class="template-reservations">
+            ${template.reservations?.map(res => {
+                const type = RESERVATION_TYPES.find(t => t.id === res.type) || RESERVATION_TYPES[8];
+                return `
+                <div class="template-reservation-item">
+                    <span>${type.icon} .${res.offset}</span>
+                    <span>${res.description}</span>
+                </div>
+            `}).join('') || '<p class="empty-state">No reservations defined</p>'}
+        </div>
+    `;
+
+    openModal('viewTemplateModal');
+}
+
+function applyTemplateToSubnet(templateId) {
+    const subnets = SubnetManager.getAll();
+
+    if (subnets.length === 0) {
+        showToast('No subnets available. Create a subnet first.', 'error');
+        return;
+    }
+
+    const template = SubnetTemplateManager.getById(templateId);
+
+    // Show subnet selection modal
+    const content = document.getElementById('applyTemplateContent');
+    content.innerHTML = `
+        <p>Select a subnet to apply the "${escapeHtml(template.name)}" template to:</p>
+        <div class="form-group">
+            <label>Subnet *</label>
+            <select id="applyTemplateSubnet" required>
+                <option value="">-- Select Subnet --</option>
+                ${subnets.map(s => `<option value="${s.id}">${s.network}/${s.cidr}${s.name ? ` (${s.name})` : ''}</option>`).join('')}
+            </select>
+        </div>
+        <div class="form-actions">
+            <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+            <button type="button" class="btn-primary" onclick="confirmApplyTemplate('${templateId}')">Apply Template</button>
+        </div>
+    `;
+
+    openModal('applyTemplateModal');
+}
+
+function confirmApplyTemplate(templateId) {
+    const subnetId = document.getElementById('applyTemplateSubnet').value;
+    if (!subnetId) {
+        showToast('Please select a subnet', 'error');
+        return;
+    }
+
+    const result = SubnetTemplateManager.applyTemplate(templateId, subnetId);
+    if (result.success) {
+        showToast(result.message, 'success');
+        closeModal();
+        refreshIPRangesTable();
+        refreshIPsTable();
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+function deleteTemplate(id) {
+    if (!confirm('Delete this custom template?')) return;
+
+    const result = SubnetTemplateManager.delete(id);
+    if (result.success) {
+        showToast(result.message, 'success');
+        refreshTemplatesGrid();
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+// ============================================
+// IP Reservations UI Functions
+// ============================================
+
+function showAddReservationModal() {
+    document.getElementById('reservationForm').reset();
+    populateReservationTypeSelect('reservationType');
+    document.querySelector('#addReservationModal .modal-header h3').textContent = 'Reserve IP Address';
+    openModal('addReservationModal');
+}
+
+function populateReservationTypeSelect(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = RESERVATION_TYPES.map(type =>
+        `<option value="${type.id}">${type.icon} ${type.name}</option>`
+    ).join('');
+}
+
+function saveReservation(e) {
+    e.preventDefault();
+
+    const ipAddress = document.getElementById('reservationIP').value;
+    const reservationType = document.getElementById('reservationType').value;
+    const description = document.getElementById('reservationDescription').value;
+    const dnsName = document.getElementById('reservationDNS').value;
+
+    if (!IPUtils.isValidIP(ipAddress)) {
+        showToast('Invalid IP address', 'error');
+        return;
+    }
+
+    // Check for conflicts
+    const conflict = ConflictDetector.checkIPConflict(ipAddress);
+    if (conflict.hasConflict) {
+        showToast(conflict.message, 'error');
+        return;
+    }
+
+    // Update IP with reservation info
+    const result = IPManager.updateStatus(ipAddress, 'reserved', null);
+    if (result.success) {
+        const ips = DB.get(DB.KEYS.IPS);
+        const ipRecord = ips.find(i => i.ipAddress === ipAddress);
+        if (ipRecord) {
+            ipRecord.reservationType = reservationType;
+            ipRecord.reservationDescription = description;
+            ipRecord.dnsName = dnsName;
+            DB.set(DB.KEYS.IPS, ips);
+        }
+        showToast('IP reserved successfully', 'success');
+        closeModal();
+        refreshIPsTable();
+        refreshDashboard();
+    } else {
+        showToast('Failed to reserve IP', 'error');
+    }
+}
+
+// ============================================
+// IP Conflict Detection UI Functions
+// ============================================
+
+function refreshConflictsPanel() {
+    const conflicts = ConflictDetector.checkForConflicts();
+    const panel = document.getElementById('conflictsPanel');
+    const badge = document.getElementById('conflictsBadge');
+
+    if (!panel) return;
+
+    if (badge) {
+        if (conflicts.length > 0) {
+            badge.textContent = conflicts.length;
+            badge.style.display = 'inline-flex';
+        } else {
+            badge.style.display = 'none';
+        }
+    }
+
+    if (conflicts.length === 0) {
+        panel.innerHTML = `
+            <div class="no-conflicts">
+                <div class="success-icon">✓</div>
+                <h4>No Conflicts Detected</h4>
+                <p>All IP addresses are properly configured.</p>
+            </div>
+        `;
+        return;
+    }
+
+    panel.innerHTML = `
+        <div class="conflicts-header">
+            <span class="conflicts-count">${conflicts.length} issue${conflicts.length !== 1 ? 's' : ''} found</span>
+        </div>
+        <div class="conflicts-list">
+            ${conflicts.map(conflict => `
+                <div class="conflict-item ${conflict.severity}">
+                    <div class="conflict-icon">${conflict.severity === 'high' ? '🔴' : '🟡'}</div>
+                    <div class="conflict-details">
+                        <span class="conflict-ip" style="font-family: monospace; font-weight: 600;">${conflict.ipAddress}</span>
+                        <p class="conflict-message">${conflict.message}</p>
+                        ${conflict.hosts ? `<span class="conflict-hosts">Hosts: ${conflict.hosts.join(', ')}</span>` : ''}
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+}
+
+// ============================================
+// DNS Integration UI Functions
+// ============================================
+
+function updateIPDNS(ipAddress, dnsName) {
+    const ips = DB.get(DB.KEYS.IPS);
+    const ipRecord = ips.find(i => i.ipAddress === ipAddress);
+
+    if (ipRecord) {
+        ipRecord.dnsName = dnsName;
+        ipRecord.updatedAt = new Date().toISOString();
+        DB.set(DB.KEYS.IPS, ips);
+        return { success: true, message: 'DNS name updated' };
+    }
+
+    return { success: false, message: 'IP not found' };
+}
+
+function showEditIPModal(ipAddress) {
+    const ips = IPManager.getAll();
+    const ip = ips.find(i => i.ipAddress === ipAddress);
+
+    if (!ip) {
+        showToast('IP not found', 'error');
+        return;
+    }
+
+    document.getElementById('editIPAddress').value = ip.ipAddress;
+    document.getElementById('editIPDNS').value = ip.dnsName || '';
+    document.getElementById('editIPStatus').value = ip.status;
+
+    populateReservationTypeSelect('editIPReservationType');
+    document.getElementById('editIPReservationType').value = ip.reservationType || 'other';
+    document.getElementById('editIPDescription').value = ip.reservationDescription || '';
+
+    populateHostSelect();
+    document.getElementById('editIPHost').value = ip.hostId || '';
+
+    openModal('editIPModal');
+}
+
+function saveEditIP(e) {
+    e.preventDefault();
+
+    const ipAddress = document.getElementById('editIPAddress').value;
+    const dnsName = document.getElementById('editIPDNS').value;
+    const status = document.getElementById('editIPStatus').value;
+    const reservationType = document.getElementById('editIPReservationType').value;
+    const description = document.getElementById('editIPDescription').value;
+    const hostId = document.getElementById('editIPHost').value;
+
+    const ips = DB.get(DB.KEYS.IPS);
+    const ipRecord = ips.find(i => i.ipAddress === ipAddress);
+
+    if (ipRecord) {
+        ipRecord.dnsName = dnsName;
+        ipRecord.status = status;
+        ipRecord.reservationType = status === 'reserved' ? reservationType : null;
+        ipRecord.reservationDescription = status === 'reserved' ? description : null;
+        ipRecord.hostId = status === 'assigned' && hostId ? hostId : null;
+        ipRecord.updatedAt = new Date().toISOString();
+        DB.set(DB.KEYS.IPS, ips);
+
+        showToast('IP updated successfully', 'success');
+        closeModal();
+        refreshIPsTable();
+        refreshDashboard();
+    } else {
+        showToast('IP not found', 'error');
+    }
+}
+
+// ============================================
+// Enhanced Navigation
+// ============================================
+
+function navigateToExtended(page) {
+    switch (page) {
+        case 'vlans':
+            refreshVLANsTable();
+            populateCompanyFilters();
+            break;
+        case 'ip-ranges':
+            refreshIPRangesTable();
+            break;
+        case 'templates':
+            refreshTemplatesGrid();
+            break;
+        case 'conflicts':
+            refreshConflictsPanel();
+            break;
+    }
+}
+
+// Override navigation to include new pages
+const originalNavigateTo = navigateTo;
+navigateTo = function(page) {
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.classList.toggle('active', item.dataset.page === page);
+    });
+
+    document.querySelectorAll('.page').forEach(p => {
+        p.classList.toggle('active', p.id === page);
+    });
+
+    switch (page) {
+        case 'dashboard':
+            refreshDashboard();
+            refreshConflictsPanel();
+            break;
+        case 'companies':
+            refreshCompaniesGrid();
+            break;
+        case 'subnets':
+            refreshSubnetsTable();
+            populateCompanyFilters();
+            break;
+        case 'hosts':
+            refreshHostsTable();
+            populateAllFilters();
+            break;
+        case 'ipam':
+            refreshIPsTable();
+            populateAllFilters();
+            break;
+        case 'vlans':
+            refreshVLANsTable();
+            populateCompanyFilters();
+            break;
+        case 'ip-ranges':
+            refreshIPRangesTable();
+            break;
+        case 'templates':
+            refreshTemplatesGrid();
+            break;
+        case 'import':
+            populateImportCompanySelect();
+            break;
+    }
+};
+
+// ============================================
+// Enhanced Dashboard with Conflicts
+// ============================================
+
+const originalRefreshDashboard = refreshDashboard;
+refreshDashboard = function() {
+    originalRefreshDashboard();
+
+    // Update conflict indicator
+    const conflicts = ConflictDetector.checkForConflicts();
+    const conflictIndicator = document.getElementById('dashboardConflicts');
+    if (conflictIndicator) {
+        if (conflicts.length > 0) {
+            conflictIndicator.innerHTML = `
+                <div class="alert alert-warning" onclick="navigateTo('ipam')">
+                    <span class="alert-icon">⚠️</span>
+                    <span>${conflicts.length} IP conflict${conflicts.length !== 1 ? 's' : ''} detected</span>
+                    <span class="alert-action">View Details →</span>
+                </div>
+            `;
+        } else {
+            conflictIndicator.innerHTML = '';
+        }
+    }
+};
+
+// ============================================
+// Populate VLAN Select for Subnets
+// ============================================
+
+function populateVLANSelect(selectId) {
+    const vlans = VLANManager.getAll();
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    select.innerHTML = '<option value="">-- No VLAN --</option>' +
+        vlans.map(v => `<option value="${v.vlanId}">VLAN ${v.vlanId} - ${v.name}</option>`).join('');
+}
+
+// ============================================
 // Initialize Application
 // ============================================
 
@@ -2498,5 +3796,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     refreshDashboard();
-    console.log('NetManager initialized');
+    refreshConflictsPanel();
+    console.log('NetManager v3.0 initialized with VLAN, IP Ranges, Templates, Reservations, and Conflict Detection');
 });
