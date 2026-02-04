@@ -23,6 +23,7 @@ A comprehensive IP Address Management (IPAM) and Configuration Management Databa
 - **CSV Import/Export**: Import from and export to CSV files
 - **Search & Filter**: Find hosts by name, OS, node, state, subnet, or company
 - **Sorting**: Click column headers to sort data
+- **Bulk Edit**: Select multiple hosts or IPs for mass changes (company, state, node, OS)
 
 ### Dashboard
 - Network overview with utilization metrics
@@ -112,6 +113,14 @@ When adding a new host:
 2. Choose your target subnet
 3. Preview shows the next available IP
 4. IP is automatically assigned on save
+
+#### Bulk Edit Operations
+Make mass changes to multiple items at once:
+- Select multiple hosts or IPs using checkboxes
+- Use "Select All" to select all visible items
+- Apply bulk changes: company assignment, state, node, OS
+- Bulk delete hosts (releases associated IPs)
+- Bulk release IPs
 
 #### Filtering & Sorting
 - **Companies**: View all companies with resource counts
@@ -219,7 +228,7 @@ Here are potential features that could enhance this IPAM & CMDB solution:
 
 ### Data Management
 31. **Data Validation Rules** - Enforce data quality standards
-32. **Bulk Operations** - Mass update/delete operations
+32. ~~**Bulk Operations** - Mass update/delete operations~~ ✅ Implemented
 33. **Import Profiles** - Save CSV mapping configurations for reuse
 34. **Data Deduplication** - Detect and merge duplicate hosts
 35. **Archive/Soft Delete** - Archive old records instead of deleting

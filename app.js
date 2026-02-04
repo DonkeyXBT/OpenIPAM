@@ -774,6 +774,8 @@ const CSVManager = {
 // ============================================
 
 let currentSort = { field: 'vm_name', direction: 'asc' };
+let selectedHosts = new Set();
+let selectedIPs = new Set();
 
 function showToast(message, type = 'info') {
     const toast = document.getElementById('toast');
@@ -1287,7 +1289,9 @@ function refreshHostsTable() {
     const tbody = document.getElementById('hostsTable').querySelector('tbody');
 
     if (hosts.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="8" class="empty-message">No hosts found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="9" class="empty-message">No hosts found</td></tr>';
+        selectedHosts.clear();
+        updateBulkEditHostsButton();
         return;
     }
 
@@ -1296,9 +1300,11 @@ function refreshHostsTable() {
         if (host.cpuCount) resources.push(`${host.cpuCount} CPU`);
         if (host.memoryTotalGB) resources.push(`${host.memoryTotalGB}GB RAM`);
         if (host.diskSizeGB) resources.push(`${host.diskSizeGB}GB Disk`);
+        const isSelected = selectedHosts.has(host.id);
 
         return `
-            <tr data-id="${host.id}" data-company="${host.companyId || ''}" data-state="${host.state?.toLowerCase()}" data-ips="${host.ipAddresses}">
+            <tr data-id="${host.id}" data-company="${host.companyId || ''}" data-state="${host.state?.toLowerCase()}" data-ips="${host.ipAddresses}" class="${isSelected ? 'selected' : ''}">
+                <td><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleHostSelection('${host.id}', this)"></td>
                 <td><strong>${escapeHtml(host.vmName)}</strong>${host.favorite ? ' ⭐' : ''}</td>
                 <td>
                     <span class="company-badge" style="background: ${host.companyColor}15; color: ${host.companyColor}">
@@ -1321,6 +1327,8 @@ function refreshHostsTable() {
             </tr>
         `;
     }).join('');
+
+    updateBulkEditHostsButton();
 }
 
 function filterHosts() {
@@ -1575,12 +1583,17 @@ function refreshIPsTable() {
     const tbody = document.getElementById('ipsTable').querySelector('tbody');
 
     if (ips.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="empty-message">No IP addresses tracked</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-message">No IP addresses tracked</td></tr>';
+        selectedIPs.clear();
+        updateBulkEditIPsButton();
         return;
     }
 
-    tbody.innerHTML = ips.map(ip => `
-        <tr data-subnet="${ip.subnetId || ''}" data-company="${ip.companyId || ''}" data-status="${ip.status}">
+    tbody.innerHTML = ips.map(ip => {
+        const isSelected = selectedIPs.has(ip.ipAddress);
+        return `
+        <tr data-ip="${ip.ipAddress}" data-subnet="${ip.subnetId || ''}" data-company="${ip.companyId || ''}" data-status="${ip.status}" class="${isSelected ? 'selected' : ''}">
+            <td><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleIPSelection('${ip.ipAddress}', this)"></td>
             <td><strong style="font-family: monospace;">${ip.ipAddress}</strong></td>
             <td>
                 ${ip.companyName ? `
@@ -1603,7 +1616,9 @@ function refreshIPsTable() {
                 </div>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
+
+    updateBulkEditIPsButton();
 }
 
 function filterIPs() {
@@ -1934,6 +1949,313 @@ document.getElementById('clearDataBtn')?.addEventListener('click', () => {
         navigateTo('dashboard');
     }
 });
+
+// ============================================
+// Bulk Edit Functions
+// ============================================
+
+// Host Selection
+function toggleHostSelection(hostId, checkbox) {
+    if (checkbox.checked) {
+        selectedHosts.add(hostId);
+    } else {
+        selectedHosts.delete(hostId);
+    }
+
+    const row = checkbox.closest('tr');
+    if (row) {
+        row.classList.toggle('selected', checkbox.checked);
+    }
+
+    updateBulkEditHostsButton();
+    updateSelectAllHostsCheckbox();
+}
+
+function toggleAllHosts(checkbox) {
+    const rows = document.querySelectorAll('#hostsTable tbody tr[data-id]');
+
+    rows.forEach(row => {
+        if (row.style.display !== 'none') {
+            const hostId = row.dataset.id;
+            const rowCheckbox = row.querySelector('input[type="checkbox"]');
+
+            if (checkbox.checked) {
+                selectedHosts.add(hostId);
+                row.classList.add('selected');
+                if (rowCheckbox) rowCheckbox.checked = true;
+            } else {
+                selectedHosts.delete(hostId);
+                row.classList.remove('selected');
+                if (rowCheckbox) rowCheckbox.checked = false;
+            }
+        }
+    });
+
+    updateBulkEditHostsButton();
+}
+
+function updateSelectAllHostsCheckbox() {
+    const selectAll = document.getElementById('selectAllHosts');
+    const visibleRows = document.querySelectorAll('#hostsTable tbody tr[data-id]:not([style*="display: none"])');
+
+    if (visibleRows.length === 0) {
+        if (selectAll) selectAll.checked = false;
+        return;
+    }
+
+    let allSelected = true;
+    visibleRows.forEach(row => {
+        if (!selectedHosts.has(row.dataset.id)) {
+            allSelected = false;
+        }
+    });
+
+    if (selectAll) selectAll.checked = allSelected;
+}
+
+function updateBulkEditHostsButton() {
+    const btn = document.getElementById('bulkEditHostsBtn');
+    const count = document.getElementById('bulkEditHostsCount');
+
+    if (btn && count) {
+        if (selectedHosts.size > 0) {
+            btn.style.display = 'inline-flex';
+            count.textContent = `Bulk Edit (${selectedHosts.size})`;
+        } else {
+            btn.style.display = 'none';
+        }
+    }
+}
+
+function showBulkEditHostsModal() {
+    if (selectedHosts.size === 0) {
+        showToast('No hosts selected', 'error');
+        return;
+    }
+
+    document.getElementById('bulkEditHostsForm').reset();
+    document.getElementById('bulkEditHostsInfo').textContent = `${selectedHosts.size} host${selectedHosts.size > 1 ? 's' : ''} selected`;
+
+    // Populate company select
+    const companies = CompanyManager.getAll();
+    const companySelect = document.getElementById('bulkHostCompany');
+    companySelect.innerHTML = '<option value="">-- No Change --</option>' +
+        companies.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+
+    openModal('bulkEditHostsModal');
+}
+
+function saveBulkEditHosts(e) {
+    e.preventDefault();
+
+    const companyId = document.getElementById('bulkHostCompany').value;
+    const state = document.getElementById('bulkHostState').value;
+    const node = document.getElementById('bulkHostNode').value.trim();
+    const os = document.getElementById('bulkHostOS').value.trim();
+
+    // Check if any changes to apply
+    if (!companyId && !state && !node && !os) {
+        showToast('No changes specified', 'error');
+        return;
+    }
+
+    let updateCount = 0;
+
+    selectedHosts.forEach(hostId => {
+        const updates = {};
+
+        if (companyId) updates.companyId = companyId;
+        if (state) updates.state = state;
+        if (node) updates.node = node;
+        if (os) updates.operatingSystem = os;
+
+        const result = HostManager.update(hostId, updates);
+        if (result.success) updateCount++;
+    });
+
+    showToast(`Updated ${updateCount} host${updateCount !== 1 ? 's' : ''}`, 'success');
+    closeModal();
+    selectedHosts.clear();
+    refreshHostsTable();
+    refreshDashboard();
+}
+
+function bulkDeleteHosts() {
+    if (selectedHosts.size === 0) {
+        showToast('No hosts selected', 'error');
+        return;
+    }
+
+    if (!confirm(`Are you sure you want to delete ${selectedHosts.size} host${selectedHosts.size > 1 ? 's' : ''}? Their IPs will be released.`)) {
+        return;
+    }
+
+    let deleteCount = 0;
+
+    selectedHosts.forEach(hostId => {
+        const result = HostManager.delete(hostId);
+        if (result.success) deleteCount++;
+    });
+
+    showToast(`Deleted ${deleteCount} host${deleteCount !== 1 ? 's' : ''}`, 'success');
+    closeModal();
+    selectedHosts.clear();
+    refreshHostsTable();
+    refreshDashboard();
+}
+
+// IP Selection
+function toggleIPSelection(ipAddress, checkbox) {
+    if (checkbox.checked) {
+        selectedIPs.add(ipAddress);
+    } else {
+        selectedIPs.delete(ipAddress);
+    }
+
+    const row = checkbox.closest('tr');
+    if (row) {
+        row.classList.toggle('selected', checkbox.checked);
+    }
+
+    updateBulkEditIPsButton();
+    updateSelectAllIPsCheckbox();
+}
+
+function toggleAllIPs(checkbox) {
+    const rows = document.querySelectorAll('#ipsTable tbody tr[data-ip]');
+
+    rows.forEach(row => {
+        if (row.style.display !== 'none') {
+            const ipAddress = row.dataset.ip;
+            const rowCheckbox = row.querySelector('input[type="checkbox"]');
+
+            if (checkbox.checked) {
+                selectedIPs.add(ipAddress);
+                row.classList.add('selected');
+                if (rowCheckbox) rowCheckbox.checked = true;
+            } else {
+                selectedIPs.delete(ipAddress);
+                row.classList.remove('selected');
+                if (rowCheckbox) rowCheckbox.checked = false;
+            }
+        }
+    });
+
+    updateBulkEditIPsButton();
+}
+
+function updateSelectAllIPsCheckbox() {
+    const selectAll = document.getElementById('selectAllIPs');
+    const visibleRows = document.querySelectorAll('#ipsTable tbody tr[data-ip]:not([style*="display: none"])');
+
+    if (visibleRows.length === 0) {
+        if (selectAll) selectAll.checked = false;
+        return;
+    }
+
+    let allSelected = true;
+    visibleRows.forEach(row => {
+        if (!selectedIPs.has(row.dataset.ip)) {
+            allSelected = false;
+        }
+    });
+
+    if (selectAll) selectAll.checked = allSelected;
+}
+
+function updateBulkEditIPsButton() {
+    const btn = document.getElementById('bulkEditIPsBtn');
+    const count = document.getElementById('bulkEditIPsCount');
+
+    if (btn && count) {
+        if (selectedIPs.size > 0) {
+            btn.style.display = 'inline-flex';
+            count.textContent = `Bulk Edit (${selectedIPs.size})`;
+        } else {
+            btn.style.display = 'none';
+        }
+    }
+}
+
+function showBulkEditIPsModal() {
+    if (selectedIPs.size === 0) {
+        showToast('No IPs selected', 'error');
+        return;
+    }
+
+    document.getElementById('bulkEditIPsForm').reset();
+    document.getElementById('bulkEditIPsInfo').textContent = `${selectedIPs.size} IP${selectedIPs.size > 1 ? 's' : ''} selected`;
+
+    // Populate host select
+    const hosts = HostManager.getAll();
+    const hostSelect = document.getElementById('bulkIPHost');
+    hostSelect.innerHTML = '<option value="">-- No Change --</option>' +
+        '<option value="__unassign__">Unassign (Release IPs)</option>' +
+        hosts.map(h => `<option value="${h.id}">${h.vmName} (${h.companyName})</option>`).join('');
+
+    openModal('bulkEditIPsModal');
+}
+
+function saveBulkEditIPs(e) {
+    e.preventDefault();
+
+    const status = document.getElementById('bulkIPStatus').value;
+    const hostId = document.getElementById('bulkIPHost').value;
+
+    // Check if any changes to apply
+    if (!status && !hostId) {
+        showToast('No changes specified', 'error');
+        return;
+    }
+
+    let updateCount = 0;
+
+    selectedIPs.forEach(ipAddress => {
+        if (hostId === '__unassign__') {
+            // Release the IP
+            IPManager.release(ipAddress);
+            updateCount++;
+        } else if (hostId && status === 'assigned') {
+            // Assign to specific host
+            const result = IPManager.assign(ipAddress, hostId);
+            if (result.success) updateCount++;
+        } else if (status) {
+            // Just change status
+            const result = IPManager.updateStatus(ipAddress, status, hostId || null);
+            if (result.success) updateCount++;
+        }
+    });
+
+    showToast(`Updated ${updateCount} IP${updateCount !== 1 ? 's' : ''}`, 'success');
+    closeModal();
+    selectedIPs.clear();
+    refreshIPsTable();
+    refreshDashboard();
+}
+
+function bulkReleaseIPs() {
+    if (selectedIPs.size === 0) {
+        showToast('No IPs selected', 'error');
+        return;
+    }
+
+    if (!confirm(`Are you sure you want to release ${selectedIPs.size} IP${selectedIPs.size > 1 ? 's' : ''}?`)) {
+        return;
+    }
+
+    let releaseCount = 0;
+
+    selectedIPs.forEach(ipAddress => {
+        const result = IPManager.release(ipAddress);
+        if (result.success) releaseCount++;
+    });
+
+    showToast(`Released ${releaseCount} IP${releaseCount !== 1 ? 's' : ''}`, 'success');
+    closeModal();
+    selectedIPs.clear();
+    refreshIPsTable();
+    refreshDashboard();
+}
 
 // ============================================
 // Initialize Application

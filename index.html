@@ -358,13 +358,22 @@
                         <h2>Host Management</h2>
                         <p class="page-description">Configuration Management Database (CMDB)</p>
                     </div>
-                    <button class="btn-primary" onclick="showAddHostModal()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="12" y1="5" x2="12" y2="19"/>
-                            <line x1="5" y1="12" x2="19" y2="12"/>
-                        </svg>
-                        Add Host
-                    </button>
+                    <div class="header-actions">
+                        <button class="btn-secondary" id="bulkEditHostsBtn" style="display: none;" onclick="showBulkEditHostsModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                            <span id="bulkEditHostsCount">Bulk Edit (0)</span>
+                        </button>
+                        <button class="btn-primary" onclick="showAddHostModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"/>
+                                <line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            Add Host
+                        </button>
+                    </div>
                 </div>
                 <div class="filters-bar">
                     <div class="search-box">
@@ -391,6 +400,7 @@
                         <table class="data-table" id="hostsTable">
                             <thead>
                                 <tr>
+                                    <th class="checkbox-col"><input type="checkbox" id="selectAllHosts" onchange="toggleAllHosts(this)"></th>
                                     <th class="sortable" data-sort="vm_name">VM Name</th>
                                     <th>Company</th>
                                     <th class="sortable" data-sort="operating_system">OS</th>
@@ -402,7 +412,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td colspan="8" class="empty-message">No hosts found</td></tr>
+                                <tr><td colspan="9" class="empty-message">No hosts found</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -416,13 +426,22 @@
                         <h2>IP Address Management</h2>
                         <p class="page-description">Track and manage IP allocations</p>
                     </div>
-                    <button class="btn-primary" onclick="showAssignIPModal()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <line x1="12" y1="5" x2="12" y2="19"/>
-                            <line x1="5" y1="12" x2="19" y2="12"/>
-                        </svg>
-                        Assign IP
-                    </button>
+                    <div class="header-actions">
+                        <button class="btn-secondary" id="bulkEditIPsBtn" style="display: none;" onclick="showBulkEditIPsModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                            </svg>
+                            <span id="bulkEditIPsCount">Bulk Edit (0)</span>
+                        </button>
+                        <button class="btn-primary" onclick="showAssignIPModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"/>
+                                <line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            Assign IP
+                        </button>
+                    </div>
                 </div>
                 <div class="filters-bar">
                     <div class="search-box">
@@ -450,6 +469,7 @@
                         <table class="data-table" id="ipsTable">
                             <thead>
                                 <tr>
+                                    <th class="checkbox-col"><input type="checkbox" id="selectAllIPs" onchange="toggleAllIPs(this)"></th>
                                     <th class="sortable" data-sort="ip">IP Address</th>
                                     <th>Company</th>
                                     <th>Subnet</th>
@@ -460,7 +480,7 @@
                                 </tr>
                             </thead>
                             <tbody>
-                                <tr><td colspan="7" class="empty-message">No IP addresses tracked</td></tr>
+                                <tr><td colspan="8" class="empty-message">No IP addresses tracked</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -892,6 +912,117 @@
         </div>
         <div class="modal-body">
             <div id="subnetIPsContent"></div>
+        </div>
+    </div>
+
+    <!-- Bulk Edit Hosts Modal -->
+    <div id="bulkEditHostsModal" class="modal">
+        <div class="modal-header">
+            <h3>Bulk Edit Hosts</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="bulk-edit-info">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 16v-4m0-4h.01"/>
+                </svg>
+                <span id="bulkEditHostsInfo">0 hosts selected</span>
+            </div>
+            <form id="bulkEditHostsForm" onsubmit="saveBulkEditHosts(event)">
+                <p class="help-text">Leave fields empty to keep current values. Only filled fields will be updated.</p>
+
+                <div class="form-group">
+                    <label>Change Company</label>
+                    <select id="bulkHostCompany">
+                        <option value="">-- No Change --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Change State</label>
+                    <select id="bulkHostState">
+                        <option value="">-- No Change --</option>
+                        <option value="running">Running</option>
+                        <option value="stopped">Stopped</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Change Node</label>
+                    <input type="text" id="bulkHostNode" placeholder="Leave empty for no change">
+                </div>
+                <div class="form-group">
+                    <label>Change Operating System</label>
+                    <input type="text" id="bulkHostOS" placeholder="Leave empty for no change">
+                </div>
+
+                <div class="bulk-danger-zone">
+                    <h4>Danger Zone</h4>
+                    <button type="button" class="btn-danger" onclick="bulkDeleteHosts()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                        </svg>
+                        Delete Selected Hosts
+                    </button>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Apply Changes</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bulk Edit IPs Modal -->
+    <div id="bulkEditIPsModal" class="modal">
+        <div class="modal-header">
+            <h3>Bulk Edit IP Addresses</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div class="bulk-edit-info">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 16v-4m0-4h.01"/>
+                </svg>
+                <span id="bulkEditIPsInfo">0 IPs selected</span>
+            </div>
+            <form id="bulkEditIPsForm" onsubmit="saveBulkEditIPs(event)">
+                <p class="help-text">Leave fields empty to keep current values. Only filled fields will be updated.</p>
+
+                <div class="form-group">
+                    <label>Change Status</label>
+                    <select id="bulkIPStatus">
+                        <option value="">-- No Change --</option>
+                        <option value="assigned">Assigned</option>
+                        <option value="available">Available</option>
+                        <option value="reserved">Reserved</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Assign to Host</label>
+                    <select id="bulkIPHost">
+                        <option value="">-- No Change --</option>
+                        <option value="__unassign__">Unassign (Release IPs)</option>
+                    </select>
+                </div>
+
+                <div class="bulk-danger-zone">
+                    <h4>Danger Zone</h4>
+                    <button type="button" class="btn-danger" onclick="bulkReleaseIPs()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2v4m0 12v4M2 12h4m12 0h4"/>
+                        </svg>
+                        Release All Selected IPs
+                    </button>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Apply Changes</button>
+                </div>
+            </form>
         </div>
     </div>
 

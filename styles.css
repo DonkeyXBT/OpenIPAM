@@ -1855,3 +1855,122 @@ body {
 .spinner {
     animation: spin 1s linear infinite;
 }
+
+/* ============================================
+   Bulk Edit Styles
+   ============================================ */
+
+/* Checkbox Column */
+.checkbox-col {
+    width: 48px;
+    text-align: center !important;
+}
+
+.checkbox-col input[type="checkbox"],
+.data-table td:first-child input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary-600);
+    cursor: pointer;
+}
+
+/* Selected Row Highlighting */
+.data-table tbody tr.selected {
+    background: var(--primary-50) !important;
+}
+
+.data-table tbody tr.selected:hover {
+    background: var(--primary-100) !important;
+}
+
+/* Bulk Edit Button */
+#bulkEditHostsBtn,
+#bulkEditIPsBtn {
+    background: linear-gradient(135deg, var(--warning-500) 0%, var(--warning-600) 100%);
+    color: white;
+    border-color: var(--warning-500);
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.3);
+}
+
+#bulkEditHostsBtn:hover,
+#bulkEditIPsBtn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.4);
+}
+
+#bulkEditHostsBtn svg,
+#bulkEditIPsBtn svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* Bulk Edit Info Banner */
+.bulk-edit-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 16px;
+    background: var(--info-50);
+    border-radius: var(--border-radius);
+    margin-bottom: 20px;
+    border: 1px solid var(--primary-200);
+}
+
+.bulk-edit-info svg {
+    width: 24px;
+    height: 24px;
+    color: var(--primary-500);
+    flex-shrink: 0;
+}
+
+.bulk-edit-info span {
+    font-weight: 600;
+    color: var(--primary-700);
+}
+
+/* Danger Zone */
+.bulk-danger-zone {
+    margin-top: 24px;
+    padding: 20px;
+    background: var(--danger-50);
+    border: 1px solid var(--danger-500);
+    border-radius: var(--border-radius);
+}
+
+.bulk-danger-zone h4 {
+    color: var(--danger-600);
+    font-size: 0.9rem;
+    margin-bottom: 12px;
+}
+
+.btn-danger {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px;
+    background: var(--danger-500);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    font-size: 0.9rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.btn-danger svg {
+    width: 18px;
+    height: 18px;
+}
+
+.btn-danger:hover {
+    background: var(--danger-600);
+    transform: translateY(-1px);
+}
+
+/* Action Buttons alignment */
+.action-btns {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
