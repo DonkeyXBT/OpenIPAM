@@ -480,6 +480,24 @@ const IPManager = {
 // Host Management (CMDB)
 // ============================================
 
+// Host Types Configuration
+const HOST_TYPES = [
+    { id: 'virtual_machine', name: 'Virtual Machine', icon: '💻', color: '#3b82f6' },
+    { id: 'physical_server', name: 'Physical Server', icon: '🖥️', color: '#6366f1' },
+    { id: 'firewall', name: 'Firewall', icon: '🛡️', color: '#ef4444' },
+    { id: 'load_balancer', name: 'Load Balancer', icon: '⚖️', color: '#8b5cf6' },
+    { id: 'router', name: 'Router', icon: '🔀', color: '#06b6d4' },
+    { id: 'switch', name: 'Switch', icon: '🔌', color: '#14b8a6' },
+    { id: 'storage', name: 'Storage', icon: '💾', color: '#f59e0b' },
+    { id: 'test_machine', name: 'Test Machine', icon: '🧪', color: '#10b981' },
+    { id: 'airco', name: 'Air Conditioning', icon: '❄️', color: '#0ea5e9' },
+    { id: 'ups', name: 'UPS', icon: '🔋', color: '#eab308' },
+    { id: 'pdu', name: 'PDU', icon: '🔌', color: '#a855f7' },
+    { id: 'printer', name: 'Printer', icon: '🖨️', color: '#64748b' },
+    { id: 'camera', name: 'Camera/NVR', icon: '📷', color: '#475569' },
+    { id: 'other', name: 'Other', icon: '📦', color: '#6b7280' }
+];
+
 const HostManager = {
     getAll() {
         const hosts = DB.get(DB.KEYS.HOSTS);
@@ -489,11 +507,15 @@ const HostManager = {
         return hosts.map(host => {
             const hostIPs = ips.filter(ip => ip.hostId === host.id);
             const company = companies.find(c => c.id === host.companyId);
+            const hostType = HOST_TYPES.find(t => t.id === host.hostType) || HOST_TYPES.find(t => t.id === 'virtual_machine');
             return {
                 ...host,
                 ipAddresses: hostIPs.map(ip => ip.ipAddress).join(', '),
                 companyName: company ? company.name : 'Unassigned',
-                companyColor: company ? company.color : '#6b7280'
+                companyColor: company ? company.color : '#6b7280',
+                hostTypeName: hostType.name,
+                hostTypeIcon: hostType.icon,
+                hostTypeColor: hostType.color
             };
         });
     },
@@ -507,12 +529,16 @@ const HostManager = {
         const hostIPs = ips.filter(ip => ip.hostId === id);
         const companies = DB.get(DB.KEYS.COMPANIES);
         const company = companies.find(c => c.id === host.companyId);
+        const hostType = HOST_TYPES.find(t => t.id === host.hostType) || HOST_TYPES.find(t => t.id === 'virtual_machine');
 
         return {
             ...host,
             ipAddresses: hostIPs.map(ip => ip.ipAddress).join(', '),
             companyName: company ? company.name : 'Unassigned',
-            companyColor: company ? company.color : '#6b7280'
+            companyColor: company ? company.color : '#6b7280',
+            hostTypeName: hostType.name,
+            hostTypeIcon: hostType.icon,
+            hostTypeColor: hostType.color
         };
     },
 
@@ -528,6 +554,9 @@ const HostManager = {
             id: DB.generateId(),
             companyId: data.companyId || null,
             vmName: data.vmName,
+            hostType: data.hostType || 'virtual_machine',
+            description: data.description || '',
+            serialNumber: data.serialNumber || '',
             operatingSystem: data.operatingSystem || '',
             memoryUsedGB: parseFloat(data.memoryUsedGB) || null,
             memoryAvailableGB: parseFloat(data.memoryAvailableGB) || null,
@@ -776,6 +805,28 @@ const CSVManager = {
 let currentSort = { field: 'vm_name', direction: 'asc' };
 let selectedHosts = new Set();
 let selectedIPs = new Set();
+
+// UI Settings
+let compactView = localStorage.getItem('ipdb_compactView') === 'true';
+let hostColumnSettings = JSON.parse(localStorage.getItem('ipdb_hostColumns') || 'null') || {
+    checkbox: true,
+    vmName: true,
+    hostType: true,
+    company: true,
+    os: true,
+    state: true,
+    node: true,
+    resources: true,
+    ipAddresses: true,
+    serialNumber: false,
+    description: false,
+    actions: true
+};
+
+function saveUISettings() {
+    localStorage.setItem('ipdb_compactView', compactView);
+    localStorage.setItem('ipdb_hostColumns', JSON.stringify(hostColumnSettings));
+}
 
 function showToast(message, type = 'info') {
     const toast = document.getElementById('toast');
@@ -1286,10 +1337,47 @@ function refreshHostsTable() {
     let hosts = HostManager.getAll();
     hosts = sortData(hosts, currentSort.field, currentSort.direction);
 
-    const tbody = document.getElementById('hostsTable').querySelector('tbody');
+    const table = document.getElementById('hostsTable');
+    const thead = table.querySelector('thead tr');
+    const tbody = table.querySelector('tbody');
+
+    // Apply compact view class
+    table.classList.toggle('compact', compactView);
+
+    // Build header with column visibility
+    let headerHtml = '';
+    if (hostColumnSettings.checkbox) headerHtml += '<th class="checkbox-col"><input type="checkbox" id="selectAllHosts" onchange="toggleAllHosts(this)"></th>';
+    if (hostColumnSettings.vmName) headerHtml += '<th class="sortable" data-sort="vm_name">Name</th>';
+    if (hostColumnSettings.hostType) headerHtml += '<th class="sortable" data-sort="host_type">Type</th>';
+    if (hostColumnSettings.company) headerHtml += '<th>Company</th>';
+    if (hostColumnSettings.os) headerHtml += '<th class="sortable" data-sort="operating_system">OS</th>';
+    if (hostColumnSettings.state) headerHtml += '<th class="sortable" data-sort="state">State</th>';
+    if (hostColumnSettings.node) headerHtml += '<th class="sortable" data-sort="node">Node</th>';
+    if (hostColumnSettings.resources) headerHtml += '<th>Resources</th>';
+    if (hostColumnSettings.ipAddresses) headerHtml += '<th>IP Addresses</th>';
+    if (hostColumnSettings.serialNumber) headerHtml += '<th>Serial Number</th>';
+    if (hostColumnSettings.description) headerHtml += '<th>Description</th>';
+    if (hostColumnSettings.actions) headerHtml += '<th>Actions</th>';
+    thead.innerHTML = headerHtml;
+
+    // Reattach sort event listeners
+    thead.querySelectorAll('.sortable').forEach(th => {
+        th.addEventListener('click', () => {
+            const field = th.dataset.sort;
+            if (currentSort.field === field) {
+                currentSort.direction = currentSort.direction === 'asc' ? 'desc' : 'asc';
+            } else {
+                currentSort.field = field;
+                currentSort.direction = 'asc';
+            }
+            refreshHostsTable();
+        });
+    });
+
+    const colCount = Object.values(hostColumnSettings).filter(v => v).length;
 
     if (hosts.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="9" class="empty-message">No hosts found</td></tr>';
+        tbody.innerHTML = `<tr><td colspan="${colCount}" class="empty-message">No hosts found</td></tr>`;
         selectedHosts.clear();
         updateBulkEditHostsButton();
         return;
@@ -1302,33 +1390,116 @@ function refreshHostsTable() {
         if (host.diskSizeGB) resources.push(`${host.diskSizeGB}GB Disk`);
         const isSelected = selectedHosts.has(host.id);
 
-        return `
-            <tr data-id="${host.id}" data-company="${host.companyId || ''}" data-state="${host.state?.toLowerCase()}" data-ips="${host.ipAddresses}" class="${isSelected ? 'selected' : ''}">
-                <td><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleHostSelection('${host.id}', this)"></td>
-                <td><strong>${escapeHtml(host.vmName)}</strong>${host.favorite ? ' ⭐' : ''}</td>
-                <td>
-                    <span class="company-badge" style="background: ${host.companyColor}15; color: ${host.companyColor}">
-                        <span class="company-badge-dot" style="background: ${host.companyColor}"></span>
-                        ${escapeHtml(host.companyName)}
-                    </span>
-                </td>
-                <td>${escapeHtml(host.operatingSystem || '-')}</td>
-                <td><span class="status-badge ${host.state?.toLowerCase()}">${host.state || '-'}</span></td>
-                <td>${escapeHtml(host.node || '-')}</td>
-                <td class="resource-display"><span>${resources.join(' • ') || '-'}</span></td>
-                <td style="font-family: monospace; font-size: 0.85rem;">${escapeHtml(host.ipAddresses || '-')}</td>
-                <td>
-                    <div class="action-btns">
-                        <button class="btn-icon view" onclick="viewHost('${host.id}')" title="View">👁</button>
-                        <button class="btn-icon edit" onclick="editHost('${host.id}')" title="Edit">✏️</button>
-                        <button class="btn-icon delete" onclick="deleteHost('${host.id}')" title="Delete">🗑️</button>
-                    </div>
-                </td>
-            </tr>
-        `;
+        let rowHtml = `<tr data-id="${host.id}" data-company="${host.companyId || ''}" data-state="${host.state?.toLowerCase()}" data-type="${host.hostType || ''}" data-ips="${host.ipAddresses}" class="${isSelected ? 'selected' : ''}">`;
+
+        if (hostColumnSettings.checkbox) {
+            rowHtml += `<td><input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleHostSelection('${host.id}', this)"></td>`;
+        }
+        if (hostColumnSettings.vmName) {
+            rowHtml += `<td><strong>${escapeHtml(host.vmName)}</strong>${host.favorite ? ' ⭐' : ''}</td>`;
+        }
+        if (hostColumnSettings.hostType) {
+            rowHtml += `<td>
+                <span class="host-type-badge" style="background: ${host.hostTypeColor}15; color: ${host.hostTypeColor}">
+                    <span class="host-type-icon">${host.hostTypeIcon}</span>
+                    <span class="host-type-name">${escapeHtml(host.hostTypeName)}</span>
+                </span>
+            </td>`;
+        }
+        if (hostColumnSettings.company) {
+            rowHtml += `<td>
+                <span class="company-badge" style="background: ${host.companyColor}15; color: ${host.companyColor}">
+                    <span class="company-badge-dot" style="background: ${host.companyColor}"></span>
+                    ${escapeHtml(host.companyName)}
+                </span>
+            </td>`;
+        }
+        if (hostColumnSettings.os) {
+            rowHtml += `<td>${escapeHtml(host.operatingSystem || '-')}</td>`;
+        }
+        if (hostColumnSettings.state) {
+            rowHtml += `<td><span class="status-badge ${host.state?.toLowerCase()}">${host.state || '-'}</span></td>`;
+        }
+        if (hostColumnSettings.node) {
+            rowHtml += `<td>${escapeHtml(host.node || '-')}</td>`;
+        }
+        if (hostColumnSettings.resources) {
+            rowHtml += `<td class="resource-display"><span>${resources.join(' • ') || '-'}</span></td>`;
+        }
+        if (hostColumnSettings.ipAddresses) {
+            rowHtml += `<td style="font-family: monospace; font-size: 0.85rem;">${escapeHtml(host.ipAddresses || '-')}</td>`;
+        }
+        if (hostColumnSettings.serialNumber) {
+            rowHtml += `<td style="font-family: monospace; font-size: 0.85rem;">${escapeHtml(host.serialNumber || '-')}</td>`;
+        }
+        if (hostColumnSettings.description) {
+            rowHtml += `<td class="description-cell">${escapeHtml(host.description || '-')}</td>`;
+        }
+        if (hostColumnSettings.actions) {
+            rowHtml += `<td>
+                <div class="action-btns">
+                    <button class="btn-icon view" onclick="viewHost('${host.id}')" title="View">👁</button>
+                    <button class="btn-icon edit" onclick="editHost('${host.id}')" title="Edit">✏️</button>
+                    <button class="btn-icon delete" onclick="deleteHost('${host.id}')" title="Delete">🗑️</button>
+                </div>
+            </td>`;
+        }
+
+        rowHtml += '</tr>';
+        return rowHtml;
     }).join('');
 
     updateBulkEditHostsButton();
+}
+
+// Toggle compact view
+function toggleCompactView() {
+    compactView = !compactView;
+    saveUISettings();
+    refreshHostsTable();
+    refreshIPsTable();
+    refreshSubnetsTable();
+
+    const btn = document.getElementById('compactViewBtn');
+    if (btn) {
+        btn.classList.toggle('active', compactView);
+    }
+}
+
+// Show column settings modal
+function showColumnSettingsModal() {
+    const content = document.getElementById('columnSettingsContent');
+    const columns = [
+        { key: 'checkbox', label: 'Selection Checkbox' },
+        { key: 'vmName', label: 'Host Name' },
+        { key: 'hostType', label: 'Host Type' },
+        { key: 'company', label: 'Company' },
+        { key: 'os', label: 'Operating System' },
+        { key: 'state', label: 'State' },
+        { key: 'node', label: 'Node' },
+        { key: 'resources', label: 'Resources' },
+        { key: 'ipAddresses', label: 'IP Addresses' },
+        { key: 'serialNumber', label: 'Serial Number' },
+        { key: 'description', label: 'Description' },
+        { key: 'actions', label: 'Actions' }
+    ];
+
+    content.innerHTML = columns.map(col => `
+        <label class="column-toggle">
+            <input type="checkbox" ${hostColumnSettings[col.key] ? 'checked' : ''}
+                   onchange="toggleColumn('${col.key}', this.checked)">
+            <span class="column-toggle-label">${col.label}</span>
+        </label>
+    `).join('');
+
+    openModal('columnSettingsModal');
+}
+
+// Toggle column visibility
+function toggleColumn(columnKey, visible) {
+    hostColumnSettings[columnKey] = visible;
+    saveUISettings();
+    refreshHostsTable();
 }
 
 function filterHosts() {
@@ -1336,6 +1507,7 @@ function filterHosts() {
     const companyFilter = document.getElementById('hostCompanyFilter').value;
     const stateFilter = document.getElementById('hostStateFilter').value.toLowerCase();
     const subnetFilter = document.getElementById('hostSubnetFilter').value;
+    const typeFilter = document.getElementById('hostTypeFilter')?.value || '';
 
     const rows = document.querySelectorAll('#hostsTable tbody tr[data-id]');
 
@@ -1343,6 +1515,7 @@ function filterHosts() {
         const text = row.textContent.toLowerCase();
         const company = row.dataset.company;
         const state = row.dataset.state;
+        const type = row.dataset.type;
         const ips = row.dataset.ips || '';
 
         let visible = true;
@@ -1350,6 +1523,7 @@ function filterHosts() {
         if (search && !text.includes(search)) visible = false;
         if (companyFilter && company !== companyFilter) visible = false;
         if (stateFilter && state !== stateFilter) visible = false;
+        if (typeFilter && type !== typeFilter) visible = false;
 
         if (subnetFilter) {
             const subnet = SubnetManager.getById(subnetFilter);
@@ -1371,12 +1545,34 @@ function showAddHostModal() {
     document.getElementById('hostEditId').value = '';
 
     populateCompanySelect('hostCompany');
+    populateHostTypeSelect('hostType');
 
     document.querySelector('input[name="ipMethod"][value="auto"]').checked = true;
     toggleIPAssignment();
 
     document.querySelector('#addHostModal .modal-header h3').textContent = 'Add Host';
     openModal('addHostModal');
+}
+
+// Populate host type select dropdown
+function populateHostTypeSelect(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+
+    select.innerHTML = HOST_TYPES.map(type =>
+        `<option value="${type.id}">${type.icon} ${type.name}</option>`
+    ).join('');
+}
+
+// Populate host type filter dropdown
+function populateHostTypeFilter() {
+    const select = document.getElementById('hostTypeFilter');
+    if (!select) return;
+
+    select.innerHTML = '<option value="">All Types</option>' +
+        HOST_TYPES.map(type =>
+            `<option value="${type.id}">${type.icon} ${type.name}</option>`
+        ).join('');
 }
 
 function updateHostSubnets() {
@@ -1428,9 +1624,13 @@ function editHost(id) {
     if (!host) return;
 
     populateCompanySelect('hostCompany');
+    populateHostTypeSelect('hostType');
 
     document.getElementById('hostCompany').value = host.companyId || '';
     document.getElementById('hostVMName').value = host.vmName || '';
+    document.getElementById('hostType').value = host.hostType || 'virtual_machine';
+    document.getElementById('hostDescription').value = host.description || '';
+    document.getElementById('hostSerialNumber').value = host.serialNumber || '';
     document.getElementById('hostOS').value = host.operatingSystem || '';
     document.getElementById('hostState').value = host.state || 'running';
     document.getElementById('hostNode').value = host.node || '';
@@ -1456,6 +1656,9 @@ function saveHost(e) {
     const data = {
         companyId: document.getElementById('hostCompany').value || null,
         vmName: document.getElementById('hostVMName').value,
+        hostType: document.getElementById('hostType').value || 'virtual_machine',
+        description: document.getElementById('hostDescription').value,
+        serialNumber: document.getElementById('hostSerialNumber').value,
         operatingSystem: document.getElementById('hostOS').value,
         state: document.getElementById('hostState').value,
         node: document.getElementById('hostNode').value,
@@ -1502,8 +1705,17 @@ function viewHost(id) {
     details.innerHTML = `
         <div class="host-details-grid">
             <div class="detail-item">
-                <label>VM Name</label>
+                <label>Host Name</label>
                 <div class="value">${escapeHtml(host.vmName)} ${host.favorite ? '⭐' : ''}</div>
+            </div>
+            <div class="detail-item">
+                <label>Host Type</label>
+                <div class="value">
+                    <span class="host-type-badge" style="background: ${host.hostTypeColor}15; color: ${host.hostTypeColor}">
+                        <span class="host-type-icon">${host.hostTypeIcon}</span>
+                        <span class="host-type-name">${escapeHtml(host.hostTypeName)}</span>
+                    </span>
+                </div>
             </div>
             <div class="detail-item">
                 <label>Company</label>
@@ -1513,6 +1725,14 @@ function viewHost(id) {
                         ${escapeHtml(host.companyName)}
                     </span>
                 </div>
+            </div>
+            <div class="detail-item">
+                <label>Serial Number</label>
+                <div class="value" style="font-family: monospace;">${escapeHtml(host.serialNumber || '-')}</div>
+            </div>
+            <div class="detail-item full-width">
+                <label>Description</label>
+                <div class="value">${escapeHtml(host.description || '-')}</div>
             </div>
             <div class="detail-item">
                 <label>Operating System</label>
@@ -1859,6 +2079,7 @@ function populateCompanyFilters() {
 
 function populateAllFilters() {
     populateCompanyFilters();
+    populateHostTypeFilter();
 
     const subnets = SubnetManager.getAll();
     const subnetOptions = '<option value="">All Subnets</option>' +
@@ -1909,7 +2130,8 @@ function sortData(data, field, direction) {
         'vm_name': 'vmName',
         'operating_system': 'operatingSystem',
         'state': 'state',
-        'node': 'node'
+        'node': 'node',
+        'host_type': 'hostType'
     };
 
     const actualField = fieldMap[field] || field;
@@ -2042,6 +2264,11 @@ function showBulkEditHostsModal() {
     companySelect.innerHTML = '<option value="">-- No Change --</option>' +
         companies.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
 
+    // Populate host type select
+    const hostTypeSelect = document.getElementById('bulkHostType');
+    hostTypeSelect.innerHTML = '<option value="">-- No Change --</option>' +
+        HOST_TYPES.map(type => `<option value="${type.id}">${type.icon} ${type.name}</option>`).join('');
+
     openModal('bulkEditHostsModal');
 }
 
@@ -2049,12 +2276,13 @@ function saveBulkEditHosts(e) {
     e.preventDefault();
 
     const companyId = document.getElementById('bulkHostCompany').value;
+    const hostType = document.getElementById('bulkHostType').value;
     const state = document.getElementById('bulkHostState').value;
     const node = document.getElementById('bulkHostNode').value.trim();
     const os = document.getElementById('bulkHostOS').value.trim();
 
     // Check if any changes to apply
-    if (!companyId && !state && !node && !os) {
+    if (!companyId && !hostType && !state && !node && !os) {
         showToast('No changes specified', 'error');
         return;
     }
@@ -2065,6 +2293,7 @@ function saveBulkEditHosts(e) {
         const updates = {};
 
         if (companyId) updates.companyId = companyId;
+        if (hostType) updates.hostType = hostType;
         if (state) updates.state = state;
         if (node) updates.node = node;
         if (os) updates.operatingSystem = os;
@@ -2262,6 +2491,12 @@ function bulkReleaseIPs() {
 // ============================================
 
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize compact view button state
+    const compactBtn = document.getElementById('compactViewBtn');
+    if (compactBtn && compactView) {
+        compactBtn.classList.add('active');
+    }
+
     refreshDashboard();
     console.log('NetManager initialized');
 });

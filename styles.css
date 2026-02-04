@@ -1974,3 +1974,268 @@ body {
     gap: 8px;
     align-items: center;
 }
+
+/* ============================================
+   Modern Custom Select / Dropdown
+   ============================================ */
+
+.custom-select-wrapper {
+    position: relative;
+}
+
+.custom-select-wrapper select {
+    appearance: none;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    width: 100%;
+    padding: 10px 40px 10px 14px;
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--border-radius);
+    font-size: 0.9rem;
+    color: var(--gray-700);
+    cursor: pointer;
+    transition: all var(--transition);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%236b7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
+    background-size: 16px;
+}
+
+.custom-select-wrapper select:hover {
+    border-color: var(--gray-300);
+    background-color: var(--gray-50);
+}
+
+.custom-select-wrapper select:focus {
+    outline: none;
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    background-color: white;
+}
+
+.custom-select-wrapper select option {
+    padding: 10px;
+}
+
+/* Filter bar select styling */
+.filters-bar .custom-select-wrapper select {
+    min-width: 150px;
+}
+
+/* ============================================
+   Host Type Badge
+   ============================================ */
+
+.host-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--border-radius-sm);
+    font-size: 0.85rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.host-type-icon {
+    font-size: 1rem;
+}
+
+.host-type-name {
+    font-size: 0.8rem;
+}
+
+/* ============================================
+   Compact View Styles
+   ============================================ */
+
+.data-table.compact th,
+.data-table.compact td {
+    padding: 8px 12px;
+    font-size: 0.85rem;
+}
+
+.data-table.compact .status-badge {
+    padding: 2px 8px;
+    font-size: 0.75rem;
+}
+
+.data-table.compact .company-badge {
+    padding: 2px 8px;
+    font-size: 0.8rem;
+}
+
+.data-table.compact .host-type-badge {
+    padding: 2px 8px;
+    font-size: 0.8rem;
+}
+
+.data-table.compact .host-type-icon {
+    font-size: 0.85rem;
+}
+
+.data-table.compact .host-type-name {
+    font-size: 0.75rem;
+}
+
+.data-table.compact .btn-icon {
+    width: 28px;
+    height: 28px;
+    font-size: 0.85rem;
+}
+
+.data-table.compact .resource-display span {
+    font-size: 0.8rem;
+}
+
+/* ============================================
+   Icon Button with Text Style
+   ============================================ */
+
+.btn-icon-text {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    background: white;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: all var(--transition);
+    color: var(--gray-600);
+}
+
+.btn-icon-text svg {
+    width: 20px;
+    height: 20px;
+}
+
+.btn-icon-text:hover {
+    background: var(--gray-50);
+    border-color: var(--gray-300);
+    color: var(--gray-800);
+}
+
+.btn-icon-text.active {
+    background: var(--primary-50);
+    border-color: var(--primary-200);
+    color: var(--primary-600);
+}
+
+/* ============================================
+   Column Settings Grid
+   ============================================ */
+
+.column-settings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin: 20px 0;
+}
+
+.column-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    background: var(--gray-50);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: all var(--transition);
+}
+
+.column-toggle:hover {
+    background: white;
+    border-color: var(--primary-300);
+}
+
+.column-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary-600);
+    cursor: pointer;
+}
+
+.column-toggle-label {
+    font-size: 0.9rem;
+    color: var(--gray-700);
+    font-weight: 500;
+}
+
+/* ============================================
+   Description Cell
+   ============================================ */
+
+.description-cell {
+    max-width: 200px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ============================================
+   Form Textarea
+   ============================================ */
+
+.form-group textarea {
+    width: 100%;
+    padding: 12px 16px;
+    background: white;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--border-radius);
+    font-size: 0.95rem;
+    font-family: inherit;
+    color: var(--gray-800);
+    transition: all var(--transition);
+    resize: vertical;
+    min-height: 80px;
+}
+
+.form-group textarea:focus {
+    outline: none;
+    border-color: var(--primary-500);
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-group textarea::placeholder {
+    color: var(--gray-400);
+}
+
+/* ============================================
+   Improved Filter Bar Responsive
+   ============================================ */
+
+@media (max-width: 1200px) {
+    .filters-bar {
+        flex-wrap: wrap;
+    }
+
+    .filters-bar .custom-select-wrapper {
+        flex: 1 1 140px;
+    }
+}
+
+/* ============================================
+   Sort Indicator
+   ============================================ */
+
+.data-table th.sortable::after {
+    content: '';
+    display: inline-block;
+    margin-left: 6px;
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 4px solid var(--gray-400);
+    vertical-align: middle;
+    opacity: 0.5;
+}
+
+.data-table th.sortable:hover::after {
+    opacity: 1;
+}
