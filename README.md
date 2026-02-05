@@ -6,9 +6,15 @@ A comprehensive IP Address Management (IPAM) and Configuration Management Databa
 
 ### Multi-Tenant Company Management
 - **Company Organization**: Manage multiple companies/organizations in a single instance
-- **Resource Isolation**: Assign subnets and hosts to specific companies
+- **Resource Isolation**: Assign subnets, hosts, and VLANs to specific companies
 - **Visual Identification**: Color-coded company badges throughout the interface
 - **Filtering**: View resources by company or across all companies
+
+### VLAN Management
+- **VLAN Tagging**: Create and manage VLANs with unique IDs (1-4094)
+- **VLAN Types**: Categorize VLANs by purpose (Data, Voice, Management, DMZ, Guest, IoT, Storage, Backup)
+- **Company Association**: Assign VLANs to specific companies
+- **Subnet Linking**: Associate subnets with VLANs for network segmentation tracking
 
 ### IPAM (IP Address Management)
 - **Subnet Management**: Add, configure, and manage network subnets with CIDR notation
@@ -16,21 +22,64 @@ A comprehensive IP Address Management (IPAM) and Configuration Management Databa
 - **IP Tracking**: Track IP usage, availability, and assignments per subnet
 - **Auto-Assignment**: Automatically get the next available IP in a subnet
 - **Usage Statistics**: Visual representation of IP utilization per subnet
-- **Automatic Subnet Detection**: When importing CSV, IPs are automatically linked to configured subnets and availability is updated
+- **Automatic Subnet Detection**: IPs are automatically linked to configured subnets
+- **Gateway & DNS Configuration**: Store gateway IP and DNS servers per subnet
+
+### IP Reservations
+- **Reserve IPs**: Reserve specific IPs for infrastructure purposes
+- **Reservation Types**: Gateway, DNS Server, DHCP Server, Firewall, Switch/Router, Access Point, Management, Future Use
+- **DNS Names**: Track DNS hostnames for reserved IPs
+- **Descriptions**: Document the purpose of each reservation
+
+### IP Range Allocation
+- **Define Ranges**: Allocate IP ranges within subnets for specific purposes
+- **Purpose Categories**: Servers, Workstations, Printers, IoT Devices, VoIP Phones, Cameras/NVR, Network Equipment, DHCP Pool, Static Assignments, Reserved
+- **Usage Tracking**: Visual progress bars showing range utilization
+- **Overlap Detection**: Prevents creating overlapping ranges within the same subnet
+
+### Subnet Templates
+- **Pre-defined Templates**: Quick deployment with built-in configurations:
+  - **Small Office**: /24 with ranges for network, servers, DHCP, printers, reserved
+  - **Datacenter**: /24 optimized for server deployments
+  - **IoT Network**: /24 configured for IoT devices and cameras
+  - **Voice/VoIP**: /24 for VoIP phone systems
+  - **DMZ**: /26 for public-facing services
+  - **Guest Network**: /24 for guest WiFi access
+- **One-Click Apply**: Apply template to any subnet to create ranges and reservations
+- **Custom Templates**: Create your own templates (coming soon)
+
+### IP Conflict Detection
+- **Duplicate Detection**: Alerts when the same IP is assigned to multiple hosts
+- **Subnet Mismatch**: Warns when IPs don't match their assigned subnet
+- **Invalid Assignments**: Detects network/broadcast address assignments
+- **Dashboard Alerts**: Conflict warnings displayed prominently on the dashboard
+- **IPAM Panel**: Detailed conflict information in the IP management view
+
+### DNS Integration
+- **DNS Name Tracking**: Associate DNS hostnames with IP addresses
+- **Display in Tables**: DNS names shown in the IP address management view
+- **Editable**: Update DNS names through the IP edit modal
 
 ### CMDB (Configuration Management Database)
 - **Host Inventory**: Complete VM/server inventory with hardware specs
+- **Host Types**: VM, Physical Server, Container, Firewall, Router, Switch, Load Balancer, Storage, Backup Server, Database Server, Web Server, Application Server, Mail Server, Printer
+- **Serial Numbers**: Track hardware serial numbers
+- **Descriptions**: Add descriptions to hosts
 - **CSV Import/Export**: Import from and export to CSV files
-- **Search & Filter**: Find hosts by name, OS, node, state, subnet, or company
+- **Search & Filter**: Find hosts by name, OS, node, state, subnet, company, or type
 - **Sorting**: Click column headers to sort data
-- **Bulk Edit**: Select multiple hosts or IPs for mass changes (company, state, node, OS)
+- **Bulk Edit**: Select multiple hosts or IPs for mass changes
+- **Column Settings**: Show/hide table columns
+- **Compact View**: Toggle compact table display
 
 ### Dashboard
-- Network overview with utilization metrics
-- Visual donut chart for IP utilization
-- Host statistics (running/stopped counts)
-- Per-subnet usage breakdown with visual progress bars
-- Recent hosts overview
+- **Network Overview**: Utilization metrics at a glance
+- **Conflict Alerts**: Warning banner when IP conflicts are detected
+- **Visual Charts**: Donut chart for IP utilization
+- **Host Statistics**: Running/stopped host counts
+- **Company Overview**: Per-company resource summary
+- **Recent Activity**: Latest hosts table
+- **Storage Monitor**: LocalStorage usage indicator
 
 ### Modern UI/UX
 - Clean, professional interface with modern design
@@ -38,6 +87,7 @@ A comprehensive IP Address Management (IPAM) and Configuration Management Databa
 - Intuitive navigation with icon-based sidebar
 - Color-coded status indicators
 - Smooth animations and transitions
+- Modal-based forms for all operations
 
 ## Installation
 
@@ -59,24 +109,48 @@ python3 -m http.server 8000
 1. **Add Companies** (Optional): Set up your organizations
    - Go to "Companies"
    - Click "+ Add Company"
-   - Enter name, color code, and optional description
+   - Enter name, color code, and optional contact info
 
-2. **Add Subnets**: Configure your subnets before importing hosts
+2. **Create VLANs** (Optional): Set up network segmentation
+   - Go to "VLANs"
+   - Click "+ Add VLAN"
+   - Enter VLAN ID, name, type, and company
+
+3. **Add Subnets**: Configure your network subnets
    - Go to "Subnet Management"
    - Click "+ Add Subnet"
-   - Enter network (e.g., `192.168.1.0`), CIDR (e.g., `/24`), and optional details
-   - Assign to a company if applicable
+   - Enter network, CIDR, gateway, DNS servers
+   - Optionally assign to a company and VLAN
 
-3. **Import Your Inventory**: Import existing hosts from a CSV file
-   - Go to "Import / Export"
-   - Select company for import (optional)
-   - Drag & drop your CSV file or click to browse
-   - IPs will automatically link to matching subnets
+4. **Apply Templates** (Optional): Quick subnet configuration
+   - Go to "Subnet Templates"
+   - Click "Apply to Subnet" on any template
+   - Select a subnet to apply the template
+   - IP ranges and reservations are created automatically
 
-4. **Add New Hosts**: Add hosts with automatic IP assignment
-   - Go to "Host Management"
-   - Click "+ Add Host"
-   - Select a subnet for auto-assignment or manually specify IPs
+5. **Reserve Infrastructure IPs**: Reserve gateways, DNS servers, etc.
+   - Go to "IP Addresses"
+   - Click "Reserve IP"
+   - Enter IP, type, DNS name, and description
+
+6. **Import Hosts**: Import from CSV or add manually
+   - Go to "Import / Export" to import CSV
+   - Or go to "Host Management" and click "+ Add Host"
+   - IPs automatically link to matching subnets
+
+### Navigation
+
+```
+Dashboard          - Overview statistics, charts, and conflict alerts
+Companies          - Manage companies/organizations
+VLANs              - VLAN management and network segmentation
+Subnet Management  - Add/edit subnets, view IP lists
+Host Management    - CMDB for all VMs/servers
+IP Addresses       - IPAM view with DNS names and reservations
+IP Ranges          - View and manage IP range allocations
+Subnet Templates   - Pre-defined configurations for quick setup
+Import / Export    - CSV import/export, backup/restore
+```
 
 ### CSV Format
 
@@ -91,86 +165,88 @@ Example:
 "Ubuntu 22.04 LTS","12.5","3.5","web-server-01","node-01","500","running","8","245","16","192.168.1.10","1"
 ```
 
-### Key Features
+### Key Operations
 
-#### Company Management
-Organize your infrastructure by company or organization:
-- Create companies with unique colors for easy identification
-- Assign subnets and hosts to companies during creation or import
-- Filter views by company to focus on specific resources
-- Track resource usage per company
+#### VLAN Management
+- Create VLANs with IDs 1-4094
+- Assign types: Data, Voice, Management, DMZ, Guest, IoT, Storage, Backup
+- Link to companies for organizational tracking
+- Associate subnets with VLANs
 
-#### Automatic IP-Subnet Linking
-When you import a CSV file or add hosts:
-- The application checks each IP address against configured subnets
-- IPs matching a subnet are automatically linked
-- Subnet availability counts are updated in real-time
-- View IP utilization per subnet on the dashboard
+#### IP Reservations
+1. Go to "IP Addresses"
+2. Click "Reserve IP"
+3. Enter the IP address
+4. Select reservation type (Gateway, DNS, DHCP, etc.)
+5. Add DNS name and description
+6. Click "Reserve IP"
 
-#### Auto IP Assignment
-When adding a new host:
-1. Select "Auto-assign from subnet"
-2. Choose your target subnet
-3. Preview shows the next available IP
-4. IP is automatically assigned on save
+#### Applying Subnet Templates
+1. Go to "Subnet Templates"
+2. Review available templates
+3. Click "Apply to Subnet"
+4. Select target subnet
+5. Template creates IP ranges and reservations automatically
 
-#### Bulk Edit Operations
-Make mass changes to multiple items at once:
-- Select multiple hosts or IPs using checkboxes
-- Use "Select All" to select all visible items
-- Apply bulk changes: company assignment, state, node, OS
-- Bulk delete hosts (releases associated IPs)
-- Bulk release IPs
+#### IP Range Allocation
+1. Go to "IP Ranges"
+2. Click "+ Add IP Range"
+3. Select subnet
+4. Enter start and end IPs
+5. Select purpose (Servers, DHCP Pool, etc.)
+6. Add name and description
 
-#### Filtering & Sorting
-- **Companies**: View all companies with resource counts
-- **Hosts**: Filter by search term, state, subnet, or company
-- **IPs**: Filter by subnet, status, or search
-- **Tables**: Click column headers to sort
-
-### Navigation
-
-```
-Dashboard          - Overview statistics and charts
-Companies          - Manage companies/organizations
-Subnet Management  - Add/edit/delete subnets, view IP lists
-Host Management    - CMDB for all VMs/servers
-IP Addresses       - IPAM view of all tracked IPs
-Import / Export    - CSV import/export, backup/restore
-```
+#### Conflict Detection
+- Conflicts appear as alerts on the dashboard
+- Detailed view in the IPAM page's conflict panel
+- Types detected:
+  - Duplicate IPs (same IP on multiple hosts)
+  - Subnet mismatches (IP outside subnet range)
+  - Network/broadcast assignments
 
 ## Data Storage
 
-All data is stored in your browser's localStorage. This means:
+All data is stored in your browser's localStorage:
 - Data persists between sessions
 - No server or database required
 - Data is specific to the browser/device
-- Use the Backup/Restore feature to move data between devices
+- Use Backup/Restore to move data between devices
+
+### Storage Keys
+- `ipdb_companies` - Company records
+- `ipdb_subnets` - Subnet configurations
+- `ipdb_hosts` - Host inventory
+- `ipdb_ips` - IP address tracking
+- `ipdb_vlans` - VLAN definitions
+- `ipdb_ip_ranges` - IP range allocations
+- `ipdb_subnet_templates` - Custom templates
 
 ### Backup & Restore
 
-- **Backup**: Downloads a JSON file with all companies, subnets, hosts, and IP assignments
-- **Restore**: Upload a backup file to restore data (replaces current data)
+- **Backup**: Downloads JSON file with all data (v3 format)
+- **Restore**: Upload backup file to restore (replaces current data)
+- **CSV Export**: Export hosts to CSV spreadsheet
 
 ## Files
 
 ```
-index.html              - Main HTML structure
-styles.css              - CSS styles
-app.js                  - JavaScript application logic
+index.html              - Main HTML structure with all pages and modals
+styles.css              - CSS styles including new feature styling
+app.js                  - JavaScript application logic (all managers and UI)
 sample_inventory.csv    - Sample data for testing
 README.md               - This documentation
 ```
 
 ## Sample Data
 
-A sample CSV file (`sample_inventory.csv`) is included with 20 example VMs. To test:
+A sample CSV file (`sample_inventory.csv`) is included. To test:
 
 1. Create a company (e.g., "Acme Corp")
-2. Add subnets: `192.168.1.0/24`, `10.0.0.0/24`, `10.0.1.0/24`
-3. Go to Import/Export
-4. Select your company and import `sample_inventory.csv`
-5. View the dashboard to see statistics
+2. Create a VLAN (e.g., VLAN 100 - Production)
+3. Add subnets: `192.168.1.0/24`, `10.0.0.0/24`, `10.0.1.0/24`
+4. Apply the "Small Office" template to one subnet
+5. Go to Import/Export and import `sample_inventory.csv`
+6. View the dashboard to see statistics
 
 ## Browser Compatibility
 
@@ -182,63 +258,93 @@ Works in all modern browsers:
 
 ---
 
-## Future Feature Suggestions
+## Feature Roadmap
 
-Here are potential features that could enhance this IPAM & CMDB solution:
+### Implemented Features
+- [x] Multi-tenant company management
+- [x] Subnet management with CIDR
+- [x] IP assignment and tracking
+- [x] Host inventory (CMDB)
+- [x] CSV import/export
+- [x] Bulk edit operations
+- [x] Dashboard with utilization charts
+- [x] **VLAN Support** - VLAN management with types and company association
+- [x] **IP Reservations** - Reserve IPs for gateways, DNS, DHCP, etc.
+- [x] **IP Range Allocation** - Assign ranges for servers, printers, IoT, etc.
+- [x] **Subnet Templates** - 6 built-in templates for quick deployment
+- [x] **IP Conflict Detection** - Alerts for duplicates and misconfigurations
+- [x] **DNS Integration** - Track DNS names for IP addresses
+- [x] **Gateway & DNS Configuration** - Per-subnet network settings
+- [x] **Host Types** - 14 different host type categories
+- [x] **Column Customization** - Show/hide table columns
 
-### Network & IP Management
-1. **VLAN Support** - Add VLAN tagging to subnets for better network segmentation tracking
-2. **IP Reservations** - Reserve specific IPs for future use (DHCP reservations, gateways, etc.)
-3. **IP Range Allocation** - Assign IP ranges to specific purposes (servers, printers, IoT, etc.)
-4. **Subnet Templates** - Pre-defined subnet configurations for quick deployment
-5. **IP Conflict Detection** - Alert when duplicate IPs are detected
-6. **DNS Integration** - Track DNS names associated with IP addresses
-7. **Gateway & DNS Configuration** - Store gateway and DNS server info per subnet
+### Planned Features
 
-### Infrastructure & CMDB
-8. **Asset Tags** - Add custom tags/labels to hosts for categorization
-9. **Custom Fields** - Define custom attributes for hosts (department, location, owner, etc.)
-10. **Host Dependencies** - Map relationships between hosts (app server → database, etc.)
-11. **Maintenance Windows** - Schedule and track maintenance periods
-12. **Host Templates** - Pre-configured host profiles for quick provisioning
-13. **Hardware Lifecycle** - Track warranty, purchase date, EOL status
+#### Infrastructure & CMDB
+- [ ] **MAC Address Tracking** - Track MAC addresses associated with IPs
+- [ ] **Asset Tags** - Add custom tags/labels to hosts for categorization
+- [ ] **Custom Fields** - Define custom attributes for hosts
+- [ ] **Host Dependencies** - Map relationships between hosts
+- [ ] **Hardware Lifecycle** - Track warranty, purchase date, EOL status
+- [ ] **Maintenance Windows** - Schedule and track maintenance periods
 
-### Monitoring & Reporting
-14. **Network Scanning** - Discover active IPs via ping sweep (requires backend)
-15. **Utilization Alerts** - Notifications when subnet utilization exceeds threshold
-16. **Audit Log** - Track all changes to IPs, hosts, and subnets
-17. **Usage Reports** - Generate PDF/Excel reports on IP utilization
-18. **Historical Data** - Track IP assignment history over time
-19. **Dashboard Widgets** - Customizable dashboard with drag-and-drop widgets
+#### Monitoring & Reporting
+- [ ] **Audit Log** - Track all changes to IPs, hosts, and subnets
+- [ ] **Historical Data** - Track IP assignment history over time
+- [ ] **Usage Reports** - Generate reports on IP utilization
+- [ ] **Utilization Alerts** - Notifications when capacity thresholds exceeded
+- [ ] **Dashboard Widgets** - Customizable dashboard layout
 
-### Multi-User & Collaboration
-20. **User Authentication** - Login system with user accounts (requires backend)
-21. **Role-Based Access** - Different permission levels (admin, viewer, editor)
-22. **Change Approval Workflow** - Require approval for certain changes
-23. **Comments & Notes** - Add notes/comments to any resource
-24. **Activity Feed** - Real-time feed of recent changes
+#### Network Tools
+- [ ] **Subnet Calculator** - Built-in CIDR/subnet calculator tool
+- [ ] **Network Topology View** - Visual network diagram
+- [ ] **Network Scanning** - Discover active IPs (requires backend)
 
-### Integration & Automation
-25. **REST API** - API endpoints for integration with other tools (requires backend)
-26. **Webhook Notifications** - Send alerts to Slack, Teams, email, etc.
-27. **Ansible/Terraform Export** - Export inventory in infrastructure-as-code formats
-28. **VMware/Proxmox Integration** - Direct import from hypervisor APIs
-29. **Active Directory Sync** - Import hosts from AD
-30. **Scheduled CSV Import** - Automatic periodic imports from file/URL
+#### UI/UX Enhancements
+- [ ] **Dark Mode** - Toggle between light and dark themes
+- [ ] **Keyboard Shortcuts** - Power user navigation
+- [ ] **Saved Filters** - Save frequently used filter combinations
+- [ ] **Activity Feed** - Real-time feed of recent changes
 
-### Data Management
-31. **Data Validation Rules** - Enforce data quality standards
-32. ~~**Bulk Operations** - Mass update/delete operations~~ ✅ Implemented
-33. **Import Profiles** - Save CSV mapping configurations for reuse
-34. **Data Deduplication** - Detect and merge duplicate hosts
-35. **Archive/Soft Delete** - Archive old records instead of deleting
+#### Integration & Export
+- [ ] **Ansible Export** - Export inventory in Ansible format
+- [ ] **Terraform Export** - Export as Terraform configuration
+- [ ] **REST API** - API endpoints (requires backend)
+- [ ] **Webhook Notifications** - Alerts to Slack, Teams, etc.
 
-### UI/UX Enhancements
-36. **Dark Mode** - Toggle between light and dark themes
-37. **Network Topology View** - Visual network diagram
-38. **Keyboard Shortcuts** - Power user keyboard navigation
-39. **Column Customization** - Show/hide table columns
-40. **Saved Filters** - Save frequently used filter combinations
+#### Multi-User (Requires Backend)
+- [ ] **User Authentication** - Login system
+- [ ] **Role-Based Access** - Admin, editor, viewer roles
+- [ ] **Change Approval** - Workflow for changes
+- [ ] **Comments & Notes** - Add notes to any resource
+
+---
+
+## Version History
+
+### v3.0 (Current)
+- Added VLAN management with types and company association
+- Added IP reservations with reservation types
+- Added IP range allocation for purpose-based organization
+- Added 6 built-in subnet templates
+- Added IP conflict detection with alerts
+- Added DNS name tracking for IPs
+- Enhanced IP table with DNS and reservation columns
+- Added dashboard conflict alerts
+
+### v2.0
+- Added host types (14 categories)
+- Added host descriptions and serial numbers
+- Added bulk edit for hosts and IPs
+- Added column customization
+- Added compact view mode
+- Modern UI redesign
+
+### v1.0
+- Initial release
+- Basic IPAM and CMDB functionality
+- Company management
+- CSV import/export
 
 ---
 

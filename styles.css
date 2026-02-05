@@ -2606,3 +2606,389 @@ body {
     padding: 24px;
     color: var(--gray-500);
 }
+
+/* ============================================
+   Sidebar Tools
+   ============================================ */
+
+.sidebar-tools {
+    display: flex;
+    gap: 8px;
+    padding: 0 16px 12px;
+}
+
+.sidebar-tool-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px;
+    background: var(--gray-100);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--border-radius);
+    cursor: pointer;
+    transition: all var(--transition);
+    color: var(--gray-600);
+}
+
+.sidebar-tool-btn:hover {
+    background: var(--gray-200);
+    color: var(--gray-800);
+}
+
+.sidebar-tool-btn svg {
+    width: 20px;
+    height: 20px;
+}
+
+/* ============================================
+   Audit Log Styles
+   ============================================ */
+
+.audit-log-list {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.audit-log-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.audit-log-item:last-child {
+    border-bottom: none;
+}
+
+.audit-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.audit-icon.create {
+    background: var(--success-100);
+    color: var(--success-600);
+}
+
+.audit-icon.update {
+    background: var(--primary-100);
+    color: var(--primary-600);
+}
+
+.audit-icon.delete {
+    background: var(--danger-100);
+    color: var(--danger-600);
+}
+
+.audit-icon.import {
+    background: var(--warning-100);
+    color: var(--warning-600);
+}
+
+.audit-details {
+    flex: 1;
+    min-width: 0;
+}
+
+.audit-action {
+    font-weight: 500;
+    color: var(--gray-900);
+    margin-bottom: 2px;
+}
+
+.audit-target {
+    font-size: 0.85rem;
+    color: var(--gray-600);
+    word-break: break-word;
+}
+
+.audit-time {
+    font-size: 0.75rem;
+    color: var(--gray-400);
+    margin-top: 4px;
+}
+
+/* ============================================
+   Subnet Calculator Results
+   ============================================ */
+
+.calc-results-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid var(--gray-200);
+}
+
+.calc-result-item {
+    padding: 12px;
+    background: var(--gray-50);
+    border-radius: var(--border-radius);
+}
+
+.calc-label {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--gray-500);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+}
+
+.calc-value {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--gray-900);
+    font-family: 'Monaco', 'Menlo', monospace;
+}
+
+.calc-result-item.highlight {
+    background: var(--primary-50);
+    border: 1px solid var(--primary-200);
+}
+
+.calc-result-item.highlight .calc-value {
+    color: var(--primary-700);
+}
+
+/* ============================================
+   Dark Mode Theme
+   ============================================ */
+
+[data-theme="dark"] {
+    --gray-50: #1a1a2e;
+    --gray-100: #16213e;
+    --gray-200: #0f3460;
+    --gray-300: #1a4a7a;
+    --gray-400: #6b7990;
+    --gray-500: #8b95a8;
+    --gray-600: #a8b2c4;
+    --gray-700: #c4cdd8;
+    --gray-800: #e0e5ec;
+    --gray-900: #f0f2f5;
+
+    --primary-50: #1a2744;
+    --primary-100: #1e3a5f;
+    --primary-200: #234d7a;
+    --primary-300: #2d6095;
+    --primary-400: #3a7cb0;
+    --primary-500: #4a8ec8;
+    --primary-600: #5da0da;
+    --primary-700: #7ab4e5;
+    --primary-800: #9ac7ed;
+    --primary-900: #bddaf5;
+
+    --success-50: #1a3d2e;
+    --success-100: #1e4d38;
+    --success-200: #246042;
+    --success-600: #4ade80;
+
+    --danger-50: #3d1a1e;
+    --danger-100: #4d1e24;
+    --danger-200: #602428;
+    --danger-600: #f87171;
+
+    --warning-50: #3d361a;
+    --warning-100: #4d441e;
+    --warning-200: #605424;
+    --warning-300: #7a6a2e;
+    --warning-600: #fbbf24;
+    --warning-800: #fef3c7;
+}
+
+[data-theme="dark"] body {
+    background: var(--gray-50);
+    color: var(--gray-800);
+}
+
+[data-theme="dark"] .sidebar {
+    background: var(--gray-100);
+    border-color: var(--gray-200);
+}
+
+[data-theme="dark"] .sidebar-brand {
+    background: linear-gradient(135deg, var(--gray-100), var(--gray-200));
+}
+
+[data-theme="dark"] .nav-item {
+    color: var(--gray-500);
+}
+
+[data-theme="dark"] .nav-item:hover {
+    background: var(--gray-200);
+    color: var(--gray-800);
+}
+
+[data-theme="dark"] .nav-item.active {
+    background: linear-gradient(90deg, var(--primary-600), var(--primary-500));
+    color: white;
+}
+
+[data-theme="dark"] .main-content {
+    background: var(--gray-50);
+}
+
+[data-theme="dark"] .card {
+    background: var(--gray-100);
+    border-color: var(--gray-200);
+}
+
+[data-theme="dark"] .stat-card {
+    background: linear-gradient(135deg, var(--gray-100), var(--gray-200));
+}
+
+[data-theme="dark"] .table th {
+    background: var(--gray-200);
+    color: var(--gray-700);
+    border-color: var(--gray-300);
+}
+
+[data-theme="dark"] .table td {
+    border-color: var(--gray-200);
+    color: var(--gray-700);
+}
+
+[data-theme="dark"] .table tbody tr:hover {
+    background: var(--gray-200);
+}
+
+[data-theme="dark"] .modal {
+    background: var(--gray-100);
+}
+
+[data-theme="dark"] .modal-header {
+    background: var(--gray-200);
+    border-color: var(--gray-300);
+}
+
+[data-theme="dark"] input,
+[data-theme="dark"] select,
+[data-theme="dark"] textarea {
+    background: var(--gray-200);
+    border-color: var(--gray-300);
+    color: var(--gray-800);
+}
+
+[data-theme="dark"] input:focus,
+[data-theme="dark"] select:focus,
+[data-theme="dark"] textarea:focus {
+    border-color: var(--primary-500);
+    background: var(--gray-100);
+}
+
+[data-theme="dark"] .btn-secondary {
+    background: var(--gray-200);
+    border-color: var(--gray-300);
+    color: var(--gray-700);
+}
+
+[data-theme="dark"] .btn-secondary:hover {
+    background: var(--gray-300);
+}
+
+[data-theme="dark"] .sidebar-tool-btn {
+    background: var(--gray-200);
+    border-color: var(--gray-300);
+    color: var(--gray-600);
+}
+
+[data-theme="dark"] .sidebar-tool-btn:hover {
+    background: var(--gray-300);
+    color: var(--gray-800);
+}
+
+[data-theme="dark"] .dark-mode-toggle svg {
+    fill: var(--warning-600);
+    stroke: var(--warning-600);
+}
+
+[data-theme="dark"] .storage-info {
+    color: var(--gray-500);
+}
+
+[data-theme="dark"] .storage-bar {
+    background: var(--gray-300);
+}
+
+[data-theme="dark"] .template-card {
+    background: var(--gray-200);
+    border-color: var(--gray-300);
+}
+
+[data-theme="dark"] .template-card:hover {
+    background: var(--gray-300);
+}
+
+[data-theme="dark"] .audit-log-item {
+    border-color: var(--gray-200);
+}
+
+[data-theme="dark"] .audit-action {
+    color: var(--gray-800);
+}
+
+[data-theme="dark"] .audit-target {
+    color: var(--gray-500);
+}
+
+[data-theme="dark"] .calc-result-item {
+    background: var(--gray-200);
+}
+
+[data-theme="dark"] .calc-value {
+    color: var(--gray-800);
+}
+
+[data-theme="dark"] .form-section-title {
+    color: var(--gray-500);
+    border-color: var(--gray-300);
+}
+
+[data-theme="dark"] .company-card {
+    background: var(--gray-200);
+    border-color: var(--gray-300);
+}
+
+[data-theme="dark"] .company-card:hover {
+    background: var(--gray-300);
+}
+
+[data-theme="dark"] .page-title h1,
+[data-theme="dark"] .page-title h2 {
+    color: var(--gray-900);
+}
+
+[data-theme="dark"] .page-description {
+    color: var(--gray-500);
+}
+
+[data-theme="dark"] .toast {
+    background: var(--gray-200);
+    color: var(--gray-800);
+}
+
+[data-theme="dark"] .modal-overlay {
+    background: rgba(0, 0, 0, 0.7);
+}
+
+[data-theme="dark"] .usage-bar-bg {
+    background: var(--gray-300);
+}
+
+[data-theme="dark"] .conflicts-panel {
+    background: var(--gray-200);
+    border-color: var(--gray-300);
+}
+
+[data-theme="dark"] .conflict-item {
+    background: var(--gray-100);
+    border-color: var(--gray-300);
+}

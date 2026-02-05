@@ -101,6 +101,25 @@
                         </svg>
                         <span>Subnet Templates</span>
                     </li>
+                    <li class="nav-item" onclick="showSubnetCalculator()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="4" y="2" width="16" height="20" rx="2"/>
+                            <line x1="8" y1="6" x2="16" y2="6"/>
+                            <line x1="8" y1="10" x2="16" y2="10"/>
+                            <line x1="8" y1="14" x2="12" y2="14"/>
+                            <line x1="8" y1="18" x2="12" y2="18"/>
+                        </svg>
+                        <span>Subnet Calculator</span>
+                    </li>
+                    <li class="nav-item" data-page="audit-log">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                            <line x1="16" y1="13" x2="8" y2="13"/>
+                            <line x1="16" y1="17" x2="8" y2="17"/>
+                        </svg>
+                        <span>Activity Log</span>
+                    </li>
                     <li class="nav-item" data-page="import">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
@@ -113,6 +132,25 @@
             </div>
 
             <div class="sidebar-footer">
+                <div class="sidebar-tools">
+                    <button id="calcBtn" class="btn-icon-text sidebar-tool-btn" onclick="showSubnetCalculator()" title="Subnet Calculator">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="4" y="2" width="16" height="20" rx="2"/>
+                            <line x1="8" y1="6" x2="16" y2="6"/>
+                            <line x1="8" y1="10" x2="10" y2="10"/>
+                            <line x1="12" y1="10" x2="14" y2="10"/>
+                            <line x1="8" y1="14" x2="10" y2="14"/>
+                            <line x1="12" y1="14" x2="14" y2="14"/>
+                            <line x1="8" y1="18" x2="10" y2="18"/>
+                            <line x1="12" y1="18" x2="16" y2="18"/>
+                        </svg>
+                    </button>
+                    <button id="darkModeBtn" class="btn-icon-text sidebar-tool-btn dark-mode-toggle" onclick="toggleDarkMode()" title="Toggle Dark Mode">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+                        </svg>
+                    </button>
+                </div>
                 <div class="storage-info">
                     <div class="storage-label">
                         <span>Local Storage</span>
@@ -736,6 +774,30 @@
                 </div>
                 <div class="templates-grid" id="templatesGrid">
                     <!-- Templates will be populated by JavaScript -->
+                </div>
+            </div>
+
+            <!-- Activity Log Page -->
+            <div id="audit-log" class="page">
+                <div class="page-header">
+                    <div class="page-title">
+                        <h2>Activity Log</h2>
+                        <p class="page-description">Track all changes and actions in the system</p>
+                    </div>
+                    <button class="btn-secondary" onclick="clearAuditLog()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="3 6 5 6 21 6"/>
+                            <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                        </svg>
+                        Clear Log
+                    </button>
+                </div>
+                <div class="card">
+                    <div class="card-body">
+                        <div id="auditLogContent" class="audit-log-list">
+                            <p class="empty-state">No activity recorded yet</p>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
@@ -1363,9 +1425,15 @@
         </div>
         <div class="modal-body">
             <form id="editIPForm" onsubmit="saveEditIP(event)">
-                <div class="form-group">
-                    <label>IP Address</label>
-                    <input type="text" id="editIPAddress" readonly>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>IP Address</label>
+                        <input type="text" id="editIPAddress" readonly>
+                    </div>
+                    <div class="form-group">
+                        <label>MAC Address</label>
+                        <input type="text" id="editIPMAC" placeholder="e.g., AA:BB:CC:DD:EE:FF">
+                    </div>
                 </div>
                 <div class="form-group">
                     <label>DNS Name</label>
@@ -1422,6 +1490,58 @@
         </div>
         <div class="modal-body">
             <div id="applyTemplateContent"></div>
+        </div>
+    </div>
+
+    <!-- Subnet Calculator Modal -->
+    <div id="subnetCalculatorModal" class="modal">
+        <div class="modal-header">
+            <h3>Subnet Calculator</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="subnetCalcForm" onsubmit="event.preventDefault(); calculateSubnet();">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>IP Address *</label>
+                        <input type="text" id="calcIP" required placeholder="e.g., 192.168.1.0">
+                    </div>
+                    <div class="form-group">
+                        <label>CIDR Prefix *</label>
+                        <select id="calcCIDR" required>
+                            <option value="8">/8</option>
+                            <option value="9">/9</option>
+                            <option value="10">/10</option>
+                            <option value="11">/11</option>
+                            <option value="12">/12</option>
+                            <option value="13">/13</option>
+                            <option value="14">/14</option>
+                            <option value="15">/15</option>
+                            <option value="16">/16</option>
+                            <option value="17">/17</option>
+                            <option value="18">/18</option>
+                            <option value="19">/19</option>
+                            <option value="20">/20</option>
+                            <option value="21">/21</option>
+                            <option value="22">/22</option>
+                            <option value="23">/23</option>
+                            <option value="24" selected>/24</option>
+                            <option value="25">/25</option>
+                            <option value="26">/26</option>
+                            <option value="27">/27</option>
+                            <option value="28">/28</option>
+                            <option value="29">/29</option>
+                            <option value="30">/30</option>
+                            <option value="31">/31</option>
+                            <option value="32">/32</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn-primary">Calculate</button>
+                </div>
+            </form>
+            <div id="subnetCalcResults"></div>
         </div>
     </div>
 
