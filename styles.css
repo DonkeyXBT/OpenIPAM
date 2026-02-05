@@ -2992,3 +2992,433 @@ body {
     background: var(--gray-100);
     border-color: var(--gray-300);
 }
+
+/* ============================================
+   Maintenance Windows Styles
+   ============================================ */
+
+.maintenance-type-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.row-active {
+    background: var(--warning-50) !important;
+}
+
+.row-past {
+    opacity: 0.6;
+}
+
+.checkbox-list {
+    max-height: 200px;
+    overflow-y: auto;
+    border: 1px solid var(--gray-200);
+    border-radius: var(--border-radius);
+    padding: 8px;
+}
+
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 8px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: background var(--transition);
+}
+
+.checkbox-item:hover {
+    background: var(--gray-100);
+}
+
+.checkbox-item input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    cursor: pointer;
+}
+
+/* ============================================
+   IP History Styles
+   ============================================ */
+
+.ip-history-list {
+    max-height: 600px;
+    overflow-y: auto;
+}
+
+.history-event-row {
+    display: grid;
+    grid-template-columns: 140px 100px 1fr 180px;
+    gap: 12px;
+    padding: 12px;
+    border-bottom: 1px solid var(--gray-200);
+    align-items: center;
+}
+
+.history-event-row:hover {
+    background: var(--gray-50);
+}
+
+.event-ip {
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-weight: 500;
+    color: var(--primary-600);
+    cursor: pointer;
+}
+
+.event-ip:hover {
+    text-decoration: underline;
+}
+
+.event-action-badge {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    text-transform: capitalize;
+}
+
+.event-action-badge.assigned {
+    background: var(--success-100);
+    color: var(--success-600);
+}
+
+.event-action-badge.released {
+    background: var(--danger-100);
+    color: var(--danger-600);
+}
+
+.event-action-badge.changed {
+    background: var(--warning-100);
+    color: var(--warning-600);
+}
+
+.event-host {
+    color: var(--gray-700);
+}
+
+.event-time {
+    font-size: 0.85rem;
+    color: var(--gray-500);
+}
+
+.ip-history-header {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--gray-200);
+}
+
+.ip-history-header h4 {
+    font-family: 'Monaco', 'Menlo', monospace;
+    font-size: 1.25rem;
+    margin-bottom: 4px;
+}
+
+.ip-timeline-summary {
+    background: var(--gray-50);
+    padding: 16px;
+    border-radius: var(--border-radius);
+    margin-bottom: 20px;
+}
+
+.ip-timeline-summary h5 {
+    margin-bottom: 12px;
+    color: var(--gray-700);
+}
+
+.timeline-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.timeline-item {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 12px;
+    background: white;
+    border-radius: 6px;
+    border-left: 3px solid var(--primary-500);
+}
+
+.timeline-host {
+    font-weight: 500;
+}
+
+.timeline-dates {
+    font-size: 0.85rem;
+    color: var(--gray-500);
+}
+
+.ip-history-events h5 {
+    margin-bottom: 12px;
+    color: var(--gray-700);
+}
+
+.history-event {
+    display: flex;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--gray-100);
+}
+
+.history-event:last-child {
+    border-bottom: none;
+}
+
+.event-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.event-icon.assigned {
+    background: var(--success-100);
+}
+
+.event-icon.released {
+    background: var(--danger-100);
+}
+
+.event-details {
+    flex: 1;
+}
+
+.event-action {
+    margin-bottom: 4px;
+}
+
+/* ============================================
+   Hardware Lifecycle Styles
+   ============================================ */
+
+.lifecycle-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.lifecycle-stat {
+    background: var(--gray-50);
+    padding: 16px;
+    border-radius: var(--border-radius);
+    text-align: center;
+}
+
+.lifecycle-stat.success {
+    background: var(--success-50);
+    border: 1px solid var(--success-200);
+}
+
+.lifecycle-stat.warning {
+    background: var(--warning-50);
+    border: 1px solid var(--warning-200);
+}
+
+.lifecycle-stat.danger {
+    background: var(--danger-50);
+    border: 1px solid var(--danger-200);
+}
+
+.lifecycle-stat .stat-value {
+    display: block;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--gray-900);
+    margin-bottom: 4px;
+}
+
+.lifecycle-stat .stat-label {
+    font-size: 0.8rem;
+    color: var(--gray-500);
+}
+
+.lifecycle-alerts {
+    background: var(--warning-50);
+    border: 1px solid var(--warning-200);
+    border-radius: var(--border-radius);
+    padding: 16px;
+    margin-bottom: 24px;
+}
+
+.lifecycle-alerts h4 {
+    margin-bottom: 12px;
+    color: var(--warning-800);
+}
+
+.alert-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.alert-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px;
+    background: white;
+    border-radius: 6px;
+    align-items: center;
+}
+
+.alert-icon {
+    font-size: 1.25rem;
+}
+
+.alert-details {
+    flex: 1;
+}
+
+.alert-details strong {
+    display: block;
+    margin-bottom: 2px;
+}
+
+.alert-status {
+    font-size: 0.85rem;
+    font-weight: 500;
+}
+
+.alert-date {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--gray-500);
+    margin-top: 2px;
+}
+
+.lifecycle-section {
+    margin-bottom: 24px;
+}
+
+.lifecycle-section h4 {
+    margin-bottom: 12px;
+    color: var(--gray-700);
+}
+
+.days-badge {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+.days-badge.warning {
+    background: var(--warning-100);
+    color: var(--warning-700);
+}
+
+.days-badge.danger {
+    background: var(--danger-100);
+    color: var(--danger-700);
+}
+
+.lifecycle-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 500;
+}
+
+/* ============================================
+   Stats Row (Mini Stats)
+   ============================================ */
+
+.stats-row {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+}
+
+.stat-mini {
+    background: var(--gray-50);
+    padding: 12px 20px;
+    border-radius: var(--border-radius);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.stat-mini .stat-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--primary-600);
+}
+
+.stat-mini .stat-label {
+    font-size: 0.75rem;
+    color: var(--gray-500);
+}
+
+/* ============================================
+   Dark Mode - New Feature Styles
+   ============================================ */
+
+[data-theme="dark"] .checkbox-list {
+    border-color: var(--gray-300);
+    background: var(--gray-200);
+}
+
+[data-theme="dark"] .checkbox-item:hover {
+    background: var(--gray-300);
+}
+
+[data-theme="dark"] .history-event-row:hover {
+    background: var(--gray-200);
+}
+
+[data-theme="dark"] .history-event-row {
+    border-color: var(--gray-300);
+}
+
+[data-theme="dark"] .ip-timeline-summary {
+    background: var(--gray-200);
+}
+
+[data-theme="dark"] .timeline-item {
+    background: var(--gray-100);
+}
+
+[data-theme="dark"] .history-event {
+    border-color: var(--gray-300);
+}
+
+[data-theme="dark"] .lifecycle-stat {
+    background: var(--gray-200);
+}
+
+[data-theme="dark"] .lifecycle-stat .stat-value {
+    color: var(--gray-800);
+}
+
+[data-theme="dark"] .lifecycle-alerts {
+    background: var(--warning-100);
+    border-color: var(--warning-300);
+}
+
+[data-theme="dark"] .alert-item {
+    background: var(--gray-200);
+}
+
+[data-theme="dark"] .stat-mini {
+    background: var(--gray-200);
+}
+
+[data-theme="dark"] .stat-mini .stat-value {
+    color: var(--primary-500);
+}

@@ -111,6 +111,28 @@
                         </svg>
                         <span>Subnet Calculator</span>
                     </li>
+                    <li class="nav-item" data-page="maintenance">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                            <line x1="16" y1="2" x2="16" y2="6"/>
+                            <line x1="8" y1="2" x2="8" y2="6"/>
+                            <line x1="3" y1="10" x2="21" y2="10"/>
+                        </svg>
+                        <span>Maintenance</span>
+                    </li>
+                    <li class="nav-item" data-page="ip-history">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        <span>IP History</span>
+                    </li>
+                    <li class="nav-item" data-page="lifecycle">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/>
+                        </svg>
+                        <span>Lifecycle</span>
+                    </li>
                     <li class="nav-item" data-page="audit-log">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
@@ -796,6 +818,86 @@
                     <div class="card-body">
                         <div id="auditLogContent" class="audit-log-list">
                             <p class="empty-state">No activity recorded yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Maintenance Windows Page -->
+            <div id="maintenance" class="page">
+                <div class="page-header">
+                    <div class="page-title">
+                        <h2>Maintenance Windows</h2>
+                        <p class="page-description">Schedule and track maintenance periods</p>
+                    </div>
+                    <button class="btn-primary" onclick="showAddMaintenanceModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        Schedule Maintenance
+                    </button>
+                </div>
+                <div class="card">
+                    <div class="card-body">
+                        <table class="table" id="maintenanceTable">
+                            <thead>
+                                <tr>
+                                    <th>Type</th>
+                                    <th>Title</th>
+                                    <th>Start Time</th>
+                                    <th>Duration</th>
+                                    <th>Affected Hosts</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr><td colspan="7" class="empty-state">No maintenance windows scheduled</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- IP History Page -->
+            <div id="ip-history" class="page">
+                <div class="page-header">
+                    <div class="page-title">
+                        <h2>IP History</h2>
+                        <p class="page-description">Track IP assignment changes over time</p>
+                    </div>
+                </div>
+                <div class="stats-row" id="ipHistoryStats">
+                    <div class="stat-mini">
+                        <span class="stat-value">0</span>
+                        <span class="stat-label">Total Events</span>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Recent Activity</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="ipHistoryList" class="ip-history-list">
+                            <p class="empty-state">No IP history recorded yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hardware Lifecycle Page -->
+            <div id="lifecycle" class="page">
+                <div class="page-header">
+                    <div class="page-title">
+                        <h2>Hardware Lifecycle</h2>
+                        <p class="page-description">Track warranty, EOL status, and hardware age</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-body">
+                        <div id="lifecycleContent">
+                            <p class="empty-state">No lifecycle data available</p>
                         </div>
                     </div>
                 </div>
@@ -1542,6 +1644,87 @@
                 </div>
             </form>
             <div id="subnetCalcResults"></div>
+        </div>
+    </div>
+
+    <!-- Add Maintenance Modal -->
+    <div id="addMaintenanceModal" class="modal modal-large">
+        <div class="modal-header">
+            <h3 id="maintenanceModalTitle">Schedule Maintenance</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="maintenanceForm" onsubmit="saveMaintenance(event)">
+                <div class="form-group">
+                    <label>Title *</label>
+                    <input type="text" id="maintenanceTitle" required placeholder="e.g., Server Patch Update">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="maintenanceDescription" placeholder="Details about the maintenance..."></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Type *</label>
+                        <select id="maintenanceType" required>
+                            <option value="scheduled">Scheduled Maintenance</option>
+                            <option value="emergency">Emergency Maintenance</option>
+                            <option value="patch">Patch/Update</option>
+                            <option value="firmware">Firmware Update</option>
+                            <option value="hardware">Hardware Maintenance</option>
+                            <option value="network">Network Maintenance</option>
+                            <option value="security">Security Update</option>
+                            <option value="backup">Backup Window</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Impact</label>
+                        <select id="maintenanceImpact">
+                            <option value="none">No Impact</option>
+                            <option value="partial" selected>Partial Outage</option>
+                            <option value="full">Full Outage</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Start Time *</label>
+                        <input type="datetime-local" id="maintenanceStart" required>
+                    </div>
+                    <div class="form-group">
+                        <label>End Time *</label>
+                        <input type="datetime-local" id="maintenanceEnd" required>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Affected Hosts</label>
+                    <div id="maintenanceHostList" class="checkbox-list">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="maintenanceNotes" placeholder="Additional notes..."></textarea>
+                </div>
+                <input type="hidden" id="maintenanceEditId">
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Save</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- IP History Modal -->
+    <div id="ipHistoryModal" class="modal modal-large">
+        <div class="modal-header">
+            <h3>IP History</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <div id="ipHistoryContent">
+                <p class="empty-state">No history available</p>
+            </div>
         </div>
     </div>
 

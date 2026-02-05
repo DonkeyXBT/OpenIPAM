@@ -18,7 +18,9 @@ const DB = {
         SUBNET_TEMPLATES: 'ipdb_subnet_templates',
         RESERVATIONS: 'ipdb_reservations',
         AUDIT_LOG: 'ipdb_audit_log',
-        SETTINGS: 'ipdb_settings'
+        SETTINGS: 'ipdb_settings',
+        IP_HISTORY: 'ipdb_ip_history',
+        MAINTENANCE_WINDOWS: 'ipdb_maintenance_windows'
     },
 
     get(key) {
@@ -937,6 +939,530 @@ const MACUtils = {
 };
 
 // ============================================
+// Hardware Lifecycle Constants
+// ============================================
+
+const LIFECYCLE_STATUS = [
+    { id: 'active', name: 'Active', color: '#22c55e', icon: '✓' },
+    { id: 'warranty', name: 'Under Warranty', color: '#3b82f6', icon: '🛡️' },
+    { id: 'expiring', name: 'Warranty Expiring', color: '#f59e0b', icon: '⚠️' },
+    { id: 'out_of_warranty', name: 'Out of Warranty', color: '#ef4444', icon: '⏰' },
+    { id: 'eol_announced', name: 'EOL Announced', color: '#f97316', icon: '📢' },
+    { id: 'eol', name: 'End of Life', color: '#dc2626', icon: '🚫' },
+    { id: 'decommissioned', name: 'Decommissioned', color: '#6b7280', icon: '🗑️' },
+    { id: 'refresh_planned', name: 'Refresh Planned', color: '#8b5cf6', icon: '🔄' }
+];
+
+const MAINTENANCE_TYPES = [
+    { id: 'scheduled', name: 'Scheduled Maintenance', color: '#3b82f6', icon: '📅' },
+    { id: 'emergency', name: 'Emergency Maintenance', color: '#ef4444', icon: '🚨' },
+    { id: 'patch', name: 'Patch/Update', color: '#22c55e', icon: '🔧' },
+    { id: 'firmware', name: 'Firmware Update', color: '#8b5cf6', icon: '💾' },
+    { id: 'hardware', name: 'Hardware Maintenance', color: '#f59e0b', icon: '🔩' },
+    { id: 'network', name: 'Network Maintenance', color: '#06b6d4', icon: '🌐' },
+    { id: 'security', name: 'Security Update', color: '#dc2626', icon: '🔒' },
+    { id: 'backup', name: 'Backup Window', color: '#84cc16', icon: '💿' }
+];
+
+const MAINTENANCE_STATUS = [
+    { id: 'scheduled', name: 'Scheduled', color: '#3b82f6' },
+    { id: 'in_progress', name: 'In Progress', color: '#f59e0b' },
+    { id: 'completed', name: 'Completed', color: '#22c55e' },
+    { id: 'cancelled', name: 'Cancelled', color: '#6b7280' },
+    { id: 'failed', name: 'Failed', color: '#ef4444' }
+];
+
+// ============================================
+// IP History Tracking
+// ============================================
+
+const IPHistory = {
+    MAX_ENTRIES_PER_IP: 100,
+
+    record(ipAddress, action, data) {
+        const history = DB.get(DB.KEYS.IP_HISTORY);
+
+        const entry = {
+            id: DB.generateId(),
+            ipAddress,
+            action, // 'assigned', 'released', 'reserved', 'changed', 'created'
+            timestamp: new Date().toISOString(),
+            hostId: data.hostId || null,
+            hostName: data.hostName || null,
+            subnetId: data.subnetId || null,
+            previousHostId: data.previousHostId || null,
+            previousHostName: data.previousHostName || null,
+            dnsName: data.dnsName || null,
+            macAddress: data.macAddress || null,
+            notes: data.notes || '',
+            userId: data.userId || 'system'
+        };
+
+        history.unshift(entry);
+
+        // Trim old entries per IP
+        const ipEntries = {};
+        const trimmed = history.filter(h => {
+            if (!ipEntries[h.ipAddress]) {
+                ipEntries[h.ipAddress] = 0;
+            }
+            ipEntries[h.ipAddress]++;
+            return ipEntries[h.ipAddress] <= this.MAX_ENTRIES_PER_IP;
+        });
+
+        DB.set(DB.KEYS.IP_HISTORY, trimmed);
+        return entry;
+    },
+
+    getByIP(ipAddress, limit = 50) {
+        const history = DB.get(DB.KEYS.IP_HISTORY);
+        return history.filter(h => h.ipAddress === ipAddress).slice(0, limit);
+    },
+
+    getByHost(hostId, limit = 50) {
+        const history = DB.get(DB.KEYS.IP_HISTORY);
+        return history.filter(h => h.hostId === hostId || h.previousHostId === hostId).slice(0, limit);
+    },
+
+    getBySubnet(subnetId, limit = 100) {
+        const history = DB.get(DB.KEYS.IP_HISTORY);
+        return history.filter(h => h.subnetId === subnetId).slice(0, limit);
+    },
+
+    getRecent(limit = 100) {
+        const history = DB.get(DB.KEYS.IP_HISTORY);
+        return history.slice(0, limit);
+    },
+
+    getAssignmentTimeline(ipAddress) {
+        const history = this.getByIP(ipAddress, 100);
+        const timeline = [];
+        let currentAssignment = null;
+
+        // Process in reverse chronological order
+        for (let i = history.length - 1; i >= 0; i--) {
+            const entry = history[i];
+            if (entry.action === 'assigned') {
+                currentAssignment = {
+                    hostId: entry.hostId,
+                    hostName: entry.hostName,
+                    startDate: entry.timestamp,
+                    endDate: null
+                };
+            } else if (entry.action === 'released' && currentAssignment) {
+                currentAssignment.endDate = entry.timestamp;
+                timeline.push({ ...currentAssignment });
+                currentAssignment = null;
+            }
+        }
+
+        // If still assigned
+        if (currentAssignment) {
+            timeline.push(currentAssignment);
+        }
+
+        return timeline.reverse();
+    },
+
+    getStats() {
+        const history = DB.get(DB.KEYS.IP_HISTORY);
+        const uniqueIPs = new Set(history.map(h => h.ipAddress)).size;
+        const assignments = history.filter(h => h.action === 'assigned').length;
+        const releases = history.filter(h => h.action === 'released').length;
+
+        // Activity by day (last 30 days)
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const recentActivity = history.filter(h => new Date(h.timestamp) >= thirtyDaysAgo);
+
+        return {
+            totalEntries: history.length,
+            uniqueIPs,
+            totalAssignments: assignments,
+            totalReleases: releases,
+            recentActivity: recentActivity.length
+        };
+    },
+
+    clear() {
+        DB.set(DB.KEYS.IP_HISTORY, []);
+    }
+};
+
+// ============================================
+// Maintenance Windows Management
+// ============================================
+
+const MaintenanceManager = {
+    getAll() {
+        const windows = DB.get(DB.KEYS.MAINTENANCE_WINDOWS);
+        const hosts = DB.get(DB.KEYS.HOSTS);
+        const subnets = DB.get(DB.KEYS.SUBNETS);
+
+        return windows.map(mw => {
+            const affectedHosts = mw.hostIds ? mw.hostIds.map(id => {
+                const host = hosts.find(h => h.id === id);
+                return host ? host.vmName : 'Unknown';
+            }) : [];
+
+            const affectedSubnets = mw.subnetIds ? mw.subnetIds.map(id => {
+                const subnet = subnets.find(s => s.id === id);
+                return subnet ? `${subnet.networkAddress}/${subnet.cidr}` : 'Unknown';
+            }) : [];
+
+            const type = MAINTENANCE_TYPES.find(t => t.id === mw.type) || MAINTENANCE_TYPES[0];
+            const status = MAINTENANCE_STATUS.find(s => s.id === mw.status) || MAINTENANCE_STATUS[0];
+
+            return {
+                ...mw,
+                affectedHostNames: affectedHosts,
+                affectedSubnetNames: affectedSubnets,
+                typeName: type.name,
+                typeIcon: type.icon,
+                typeColor: type.color,
+                statusName: status.name,
+                statusColor: status.color,
+                isActive: this.isActive(mw),
+                isUpcoming: this.isUpcoming(mw),
+                isPast: this.isPast(mw)
+            };
+        }).sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+    },
+
+    getById(id) {
+        const windows = DB.get(DB.KEYS.MAINTENANCE_WINDOWS);
+        return windows.find(mw => mw.id === id);
+    },
+
+    getUpcoming(days = 7) {
+        const all = this.getAll();
+        const futureDate = new Date();
+        futureDate.setDate(futureDate.getDate() + days);
+
+        return all.filter(mw => {
+            const startTime = new Date(mw.startTime);
+            return startTime >= new Date() && startTime <= futureDate && mw.status === 'scheduled';
+        });
+    },
+
+    getActive() {
+        return this.getAll().filter(mw => this.isActive(mw));
+    },
+
+    getByHost(hostId) {
+        const all = this.getAll();
+        return all.filter(mw => mw.hostIds && mw.hostIds.includes(hostId));
+    },
+
+    getBySubnet(subnetId) {
+        const all = this.getAll();
+        return all.filter(mw => mw.subnetIds && mw.subnetIds.includes(subnetId));
+    },
+
+    isActive(mw) {
+        const now = new Date();
+        const start = new Date(mw.startTime);
+        const end = new Date(mw.endTime);
+        return now >= start && now <= end && mw.status === 'in_progress';
+    },
+
+    isUpcoming(mw) {
+        const now = new Date();
+        const start = new Date(mw.startTime);
+        return start > now && mw.status === 'scheduled';
+    },
+
+    isPast(mw) {
+        const now = new Date();
+        const end = new Date(mw.endTime);
+        return end < now;
+    },
+
+    add(data) {
+        const windows = DB.get(DB.KEYS.MAINTENANCE_WINDOWS);
+
+        const newWindow = {
+            id: DB.generateId(),
+            title: data.title,
+            description: data.description || '',
+            type: data.type || 'scheduled',
+            status: 'scheduled',
+            startTime: data.startTime,
+            endTime: data.endTime,
+            hostIds: data.hostIds || [],
+            subnetIds: data.subnetIds || [],
+            impact: data.impact || 'partial', // 'none', 'partial', 'full'
+            notifyBefore: data.notifyBefore || 24, // hours
+            recurring: data.recurring || false,
+            recurringPattern: data.recurringPattern || null, // 'daily', 'weekly', 'monthly'
+            notes: data.notes || '',
+            createdAt: new Date().toISOString(),
+            createdBy: data.createdBy || 'system'
+        };
+
+        windows.push(newWindow);
+        DB.set(DB.KEYS.MAINTENANCE_WINDOWS, windows);
+
+        AuditLog.log('create', 'maintenance', newWindow.id,
+            `Created maintenance window: ${newWindow.title}`, null, newWindow);
+
+        return { success: true, window: newWindow };
+    },
+
+    update(id, data) {
+        const windows = DB.get(DB.KEYS.MAINTENANCE_WINDOWS);
+        const index = windows.findIndex(mw => mw.id === id);
+
+        if (index === -1) {
+            return { success: false, message: 'Maintenance window not found' };
+        }
+
+        const oldWindow = { ...windows[index] };
+        windows[index] = {
+            ...windows[index],
+            ...data,
+            updatedAt: new Date().toISOString()
+        };
+
+        DB.set(DB.KEYS.MAINTENANCE_WINDOWS, windows);
+
+        AuditLog.log('update', 'maintenance', id,
+            `Updated maintenance window: ${windows[index].title}`, oldWindow, windows[index]);
+
+        return { success: true, window: windows[index] };
+    },
+
+    updateStatus(id, status, notes = '') {
+        const windows = DB.get(DB.KEYS.MAINTENANCE_WINDOWS);
+        const index = windows.findIndex(mw => mw.id === id);
+
+        if (index === -1) {
+            return { success: false, message: 'Maintenance window not found' };
+        }
+
+        const oldStatus = windows[index].status;
+        windows[index].status = status;
+        windows[index].statusNotes = notes;
+        windows[index].statusUpdatedAt = new Date().toISOString();
+
+        if (status === 'completed') {
+            windows[index].completedAt = new Date().toISOString();
+        }
+
+        DB.set(DB.KEYS.MAINTENANCE_WINDOWS, windows);
+
+        AuditLog.log('update', 'maintenance', id,
+            `Changed status from ${oldStatus} to ${status}`, { status: oldStatus }, { status });
+
+        return { success: true };
+    },
+
+    delete(id) {
+        const windows = DB.get(DB.KEYS.MAINTENANCE_WINDOWS);
+        const window = windows.find(mw => mw.id === id);
+
+        if (!window) {
+            return { success: false, message: 'Maintenance window not found' };
+        }
+
+        const filtered = windows.filter(mw => mw.id !== id);
+        DB.set(DB.KEYS.MAINTENANCE_WINDOWS, filtered);
+
+        AuditLog.log('delete', 'maintenance', id,
+            `Deleted maintenance window: ${window.title}`, window, null);
+
+        return { success: true };
+    },
+
+    getCalendarEvents(startDate, endDate) {
+        const all = this.getAll();
+        return all.filter(mw => {
+            const start = new Date(mw.startTime);
+            const end = new Date(mw.endTime);
+            return start <= endDate && end >= startDate;
+        }).map(mw => ({
+            id: mw.id,
+            title: mw.title,
+            start: mw.startTime,
+            end: mw.endTime,
+            type: mw.type,
+            status: mw.status,
+            color: MAINTENANCE_TYPES.find(t => t.id === mw.type)?.color || '#3b82f6'
+        }));
+    }
+};
+
+// ============================================
+// Hardware Lifecycle Management
+// ============================================
+
+const HardwareLifecycle = {
+    getStatus(host) {
+        if (!host.purchaseDate && !host.warrantyExpiry && !host.eolDate) {
+            return null;
+        }
+
+        const now = new Date();
+        const warrantyExpiry = host.warrantyExpiry ? new Date(host.warrantyExpiry) : null;
+        const eolDate = host.eolDate ? new Date(host.eolDate) : null;
+
+        // Check decommissioned first
+        if (host.lifecycleStatus === 'decommissioned') {
+            return LIFECYCLE_STATUS.find(s => s.id === 'decommissioned');
+        }
+
+        // Check EOL
+        if (eolDate && now >= eolDate) {
+            return LIFECYCLE_STATUS.find(s => s.id === 'eol');
+        }
+
+        // Check EOL announced (within 6 months)
+        if (eolDate) {
+            const sixMonthsBefore = new Date(eolDate);
+            sixMonthsBefore.setMonth(sixMonthsBefore.getMonth() - 6);
+            if (now >= sixMonthsBefore) {
+                return LIFECYCLE_STATUS.find(s => s.id === 'eol_announced');
+            }
+        }
+
+        // Check warranty
+        if (warrantyExpiry) {
+            if (now > warrantyExpiry) {
+                return LIFECYCLE_STATUS.find(s => s.id === 'out_of_warranty');
+            }
+
+            // Check if expiring within 30 days
+            const thirtyDaysFromNow = new Date();
+            thirtyDaysFromNow.setDate(thirtyDaysFromNow.getDate() + 30);
+            if (warrantyExpiry <= thirtyDaysFromNow) {
+                return LIFECYCLE_STATUS.find(s => s.id === 'expiring');
+            }
+
+            return LIFECYCLE_STATUS.find(s => s.id === 'warranty');
+        }
+
+        return LIFECYCLE_STATUS.find(s => s.id === 'active');
+    },
+
+    getHostsNeedingAttention() {
+        const hosts = DB.get(DB.KEYS.HOSTS);
+        const attention = [];
+
+        hosts.forEach(host => {
+            const status = this.getStatus(host);
+            if (status && ['expiring', 'out_of_warranty', 'eol_announced', 'eol'].includes(status.id)) {
+                attention.push({
+                    ...host,
+                    lifecycleAlert: status
+                });
+            }
+        });
+
+        return attention;
+    },
+
+    getWarrantyExpiringSoon(days = 30) {
+        const hosts = DB.get(DB.KEYS.HOSTS);
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() + days);
+
+        return hosts.filter(host => {
+            if (!host.warrantyExpiry) return false;
+            const expiry = new Date(host.warrantyExpiry);
+            return expiry > new Date() && expiry <= cutoff;
+        });
+    },
+
+    getEOLSoon(days = 180) {
+        const hosts = DB.get(DB.KEYS.HOSTS);
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() + days);
+
+        return hosts.filter(host => {
+            if (!host.eolDate) return false;
+            const eol = new Date(host.eolDate);
+            return eol > new Date() && eol <= cutoff;
+        });
+    },
+
+    calculateAge(purchaseDate) {
+        if (!purchaseDate) return null;
+        const purchase = new Date(purchaseDate);
+        const now = new Date();
+        const years = (now - purchase) / (365.25 * 24 * 60 * 60 * 1000);
+        return Math.round(years * 10) / 10; // Round to 1 decimal
+    },
+
+    getDaysUntilWarrantyExpiry(warrantyExpiry) {
+        if (!warrantyExpiry) return null;
+        const expiry = new Date(warrantyExpiry);
+        const now = new Date();
+        return Math.ceil((expiry - now) / (24 * 60 * 60 * 1000));
+    },
+
+    getDaysUntilEOL(eolDate) {
+        if (!eolDate) return null;
+        const eol = new Date(eolDate);
+        const now = new Date();
+        return Math.ceil((eol - now) / (24 * 60 * 60 * 1000));
+    },
+
+    getSummary() {
+        const hosts = DB.get(DB.KEYS.HOSTS);
+        const summary = {
+            total: hosts.length,
+            withLifecycleData: 0,
+            underWarranty: 0,
+            warrantyExpiringSoon: 0,
+            outOfWarranty: 0,
+            eolAnnounced: 0,
+            eol: 0,
+            averageAge: 0
+        };
+
+        let totalAge = 0;
+        let ageCount = 0;
+
+        hosts.forEach(host => {
+            if (host.purchaseDate || host.warrantyExpiry || host.eolDate) {
+                summary.withLifecycleData++;
+            }
+
+            const status = this.getStatus(host);
+            if (status) {
+                switch (status.id) {
+                    case 'warranty':
+                        summary.underWarranty++;
+                        break;
+                    case 'expiring':
+                        summary.warrantyExpiringSoon++;
+                        break;
+                    case 'out_of_warranty':
+                        summary.outOfWarranty++;
+                        break;
+                    case 'eol_announced':
+                        summary.eolAnnounced++;
+                        break;
+                    case 'eol':
+                        summary.eol++;
+                        break;
+                }
+            }
+
+            const age = this.calculateAge(host.purchaseDate);
+            if (age !== null) {
+                totalAge += age;
+                ageCount++;
+            }
+        });
+
+        summary.averageAge = ageCount > 0 ? Math.round(totalAge / ageCount * 10) / 10 : 0;
+
+        return summary;
+    }
+};
+
+// ============================================
 // Company Management
 // ============================================
 
@@ -1198,6 +1724,8 @@ const IPManager = {
         }
 
         const ips = DB.get(DB.KEYS.IPS);
+        const hosts = DB.get(DB.KEYS.HOSTS);
+        const host = hosts.find(h => h.id === hostId);
 
         if (!subnetId) {
             const subnet = IPUtils.findSubnetForIP(ipAddress);
@@ -1205,10 +1733,17 @@ const IPManager = {
         }
 
         const existingIndex = ips.findIndex(ip => ip.ipAddress === ipAddress);
+        let previousHostId = null;
+        let previousHostName = null;
 
         if (existingIndex !== -1) {
             if (ips[existingIndex].status === 'assigned' && ips[existingIndex].hostId !== hostId) {
                 return { success: false, message: 'IP already assigned to another host' };
+            }
+            previousHostId = ips[existingIndex].hostId;
+            if (previousHostId) {
+                const prevHost = hosts.find(h => h.id === previousHostId);
+                previousHostName = prevHost ? prevHost.vmName : null;
             }
             ips[existingIndex].hostId = hostId;
             ips[existingIndex].status = 'assigned';
@@ -1226,15 +1761,33 @@ const IPManager = {
         }
 
         DB.set(DB.KEYS.IPS, ips);
+
+        // Record IP history
+        IPHistory.record(ipAddress, 'assigned', {
+            hostId,
+            hostName: host ? host.vmName : null,
+            subnetId,
+            previousHostId,
+            previousHostName
+        });
+
         return { success: true, message: 'IP assigned successfully' };
     },
 
     release(ipAddress) {
         const ips = DB.get(DB.KEYS.IPS);
+        const hosts = DB.get(DB.KEYS.HOSTS);
         const index = ips.findIndex(ip => ip.ipAddress === ipAddress);
 
         if (index === -1) {
             return { success: false, message: 'IP not found' };
+        }
+
+        const previousHostId = ips[index].hostId;
+        let previousHostName = null;
+        if (previousHostId) {
+            const prevHost = hosts.find(h => h.id === previousHostId);
+            previousHostName = prevHost ? prevHost.vmName : null;
         }
 
         ips[index].hostId = null;
@@ -1242,6 +1795,14 @@ const IPManager = {
         ips[index].updatedAt = new Date().toISOString();
 
         DB.set(DB.KEYS.IPS, ips);
+
+        // Record IP history
+        IPHistory.record(ipAddress, 'released', {
+            subnetId: ips[index].subnetId,
+            previousHostId,
+            previousHostName
+        });
+
         return { success: true, message: 'IP released successfully' };
     },
 
@@ -1403,6 +1964,15 @@ const HostManager = {
             state: data.state || 'running',
             cpuCount: parseInt(data.cpuCount) || null,
             favorite: data.favorite ? 1 : 0,
+            // Hardware Lifecycle fields
+            purchaseDate: data.purchaseDate || null,
+            warrantyExpiry: data.warrantyExpiry || null,
+            eolDate: data.eolDate || null,
+            lifecycleStatus: data.lifecycleStatus || 'active',
+            vendor: data.vendor || '',
+            model: data.model || '',
+            assetTag: data.assetTag || '',
+            location: data.location || '',
             createdAt: new Date().toISOString()
         };
 
@@ -2850,7 +3420,7 @@ function exportToCSV() {
 
 function backupDatabase() {
     const backup = {
-        version: 3,
+        version: 4,
         timestamp: new Date().toISOString(),
         companies: DB.get(DB.KEYS.COMPANIES),
         subnets: DB.get(DB.KEYS.SUBNETS),
@@ -2859,7 +3429,11 @@ function backupDatabase() {
         vlans: DB.get(DB.KEYS.VLANS),
         ipRanges: DB.get(DB.KEYS.IP_RANGES),
         subnetTemplates: DB.get(DB.KEYS.SUBNET_TEMPLATES),
-        reservations: DB.get(DB.KEYS.RESERVATIONS)
+        reservations: DB.get(DB.KEYS.RESERVATIONS),
+        ipHistory: DB.get(DB.KEYS.IP_HISTORY),
+        maintenanceWindows: DB.get(DB.KEYS.MAINTENANCE_WINDOWS),
+        auditLog: DB.get(DB.KEYS.AUDIT_LOG),
+        settings: localStorage.getItem(DB.KEYS.SETTINGS) ? JSON.parse(localStorage.getItem(DB.KEYS.SETTINGS)) : {}
     };
 
     const json = JSON.stringify(backup, null, 2);
@@ -2890,6 +3464,12 @@ function restoreDatabase(event) {
             DB.set(DB.KEYS.IP_RANGES, backup.ipRanges || []);
             DB.set(DB.KEYS.SUBNET_TEMPLATES, backup.subnetTemplates || []);
             DB.set(DB.KEYS.RESERVATIONS, backup.reservations || []);
+            DB.set(DB.KEYS.IP_HISTORY, backup.ipHistory || []);
+            DB.set(DB.KEYS.MAINTENANCE_WINDOWS, backup.maintenanceWindows || []);
+            DB.set(DB.KEYS.AUDIT_LOG, backup.auditLog || []);
+            if (backup.settings) {
+                localStorage.setItem(DB.KEYS.SETTINGS, JSON.stringify(backup.settings));
+            }
 
             showToast('Database restored successfully', 'success');
             navigateTo('dashboard');
@@ -3994,6 +4574,15 @@ navigateTo = function(page) {
         case 'audit-log':
             refreshAuditLog();
             break;
+        case 'maintenance':
+            refreshMaintenanceTable();
+            break;
+        case 'ip-history':
+            refreshIPHistoryPage();
+            break;
+        case 'lifecycle':
+            refreshLifecycleDashboard();
+            break;
     }
 };
 
@@ -4183,6 +4772,418 @@ function calculateSubnet() {
 }
 
 // ============================================
+// Maintenance Windows UI
+// ============================================
+
+function refreshMaintenanceTable() {
+    const tbody = document.querySelector('#maintenanceTable tbody');
+    if (!tbody) return;
+
+    const windows = MaintenanceManager.getAll();
+
+    if (windows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No maintenance windows scheduled</td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = windows.map(mw => {
+        const startDate = new Date(mw.startTime);
+        const endDate = new Date(mw.endTime);
+        const duration = Math.round((endDate - startDate) / (1000 * 60 * 60 * 10)) / 10; // hours
+
+        return `
+            <tr class="${mw.isActive ? 'row-active' : ''} ${mw.isPast ? 'row-past' : ''}">
+                <td>
+                    <span class="maintenance-type-badge" style="background: ${mw.typeColor}20; color: ${mw.typeColor}">
+                        ${mw.typeIcon} ${mw.typeName}
+                    </span>
+                </td>
+                <td>
+                    <strong>${mw.title}</strong>
+                    ${mw.description ? `<br><small class="text-muted">${mw.description}</small>` : ''}
+                </td>
+                <td>${startDate.toLocaleString()}</td>
+                <td>${duration}h</td>
+                <td>
+                    ${mw.affectedHostNames.length > 0 ? mw.affectedHostNames.slice(0, 3).join(', ') : '-'}
+                    ${mw.affectedHostNames.length > 3 ? ` +${mw.affectedHostNames.length - 3} more` : ''}
+                </td>
+                <td>
+                    <span class="status-badge" style="background: ${mw.statusColor}20; color: ${mw.statusColor}">
+                        ${mw.statusName}
+                    </span>
+                </td>
+                <td>
+                    <div class="action-buttons">
+                        ${mw.status === 'scheduled' ? `
+                            <button class="btn-icon" onclick="startMaintenance('${mw.id}')" title="Start">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            </button>
+                        ` : ''}
+                        ${mw.status === 'in_progress' ? `
+                            <button class="btn-icon" onclick="completeMaintenance('${mw.id}')" title="Complete">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                            </button>
+                        ` : ''}
+                        <button class="btn-icon" onclick="showEditMaintenanceModal('${mw.id}')" title="Edit">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        </button>
+                        <button class="btn-icon btn-icon-danger" onclick="deleteMaintenance('${mw.id}')" title="Delete">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function showAddMaintenanceModal() {
+    document.getElementById('maintenanceForm').reset();
+    document.getElementById('maintenanceEditId').value = '';
+    document.getElementById('maintenanceModalTitle').textContent = 'Schedule Maintenance';
+
+    // Set default times
+    const now = new Date();
+    const start = new Date(now.getTime() + 24 * 60 * 60 * 1000); // tomorrow
+    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000); // 2 hours later
+
+    document.getElementById('maintenanceStart').value = start.toISOString().slice(0, 16);
+    document.getElementById('maintenanceEnd').value = end.toISOString().slice(0, 16);
+
+    // Populate host checkboxes
+    populateMaintenanceHostList();
+
+    openModal('addMaintenanceModal');
+}
+
+function showEditMaintenanceModal(id) {
+    const mw = MaintenanceManager.getById(id);
+    if (!mw) return;
+
+    document.getElementById('maintenanceEditId').value = id;
+    document.getElementById('maintenanceModalTitle').textContent = 'Edit Maintenance';
+    document.getElementById('maintenanceTitle').value = mw.title;
+    document.getElementById('maintenanceDescription').value = mw.description || '';
+    document.getElementById('maintenanceType').value = mw.type;
+    document.getElementById('maintenanceStart').value = mw.startTime.slice(0, 16);
+    document.getElementById('maintenanceEnd').value = mw.endTime.slice(0, 16);
+    document.getElementById('maintenanceImpact').value = mw.impact || 'partial';
+    document.getElementById('maintenanceNotes').value = mw.notes || '';
+
+    populateMaintenanceHostList(mw.hostIds);
+
+    openModal('addMaintenanceModal');
+}
+
+function populateMaintenanceHostList(selectedIds = []) {
+    const container = document.getElementById('maintenanceHostList');
+    if (!container) return;
+
+    const hosts = HostManager.getAll();
+    container.innerHTML = hosts.map(host => `
+        <label class="checkbox-item">
+            <input type="checkbox" name="maintenanceHosts" value="${host.id}"
+                ${selectedIds.includes(host.id) ? 'checked' : ''}>
+            <span>${host.vmName}</span>
+        </label>
+    `).join('');
+}
+
+function saveMaintenance(event) {
+    event.preventDefault();
+
+    const editId = document.getElementById('maintenanceEditId').value;
+    const selectedHosts = Array.from(document.querySelectorAll('input[name="maintenanceHosts"]:checked'))
+        .map(cb => cb.value);
+
+    const data = {
+        title: document.getElementById('maintenanceTitle').value,
+        description: document.getElementById('maintenanceDescription').value,
+        type: document.getElementById('maintenanceType').value,
+        startTime: document.getElementById('maintenanceStart').value,
+        endTime: document.getElementById('maintenanceEnd').value,
+        impact: document.getElementById('maintenanceImpact').value,
+        notes: document.getElementById('maintenanceNotes').value,
+        hostIds: selectedHosts
+    };
+
+    let result;
+    if (editId) {
+        result = MaintenanceManager.update(editId, data);
+    } else {
+        result = MaintenanceManager.add(data);
+    }
+
+    if (result.success) {
+        showToast(editId ? 'Maintenance updated' : 'Maintenance scheduled', 'success');
+        closeModal();
+        refreshMaintenanceTable();
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+function startMaintenance(id) {
+    if (confirm('Start this maintenance window now?')) {
+        MaintenanceManager.updateStatus(id, 'in_progress');
+        showToast('Maintenance started', 'success');
+        refreshMaintenanceTable();
+    }
+}
+
+function completeMaintenance(id) {
+    if (confirm('Mark this maintenance as completed?')) {
+        MaintenanceManager.updateStatus(id, 'completed');
+        showToast('Maintenance completed', 'success');
+        refreshMaintenanceTable();
+    }
+}
+
+function deleteMaintenance(id) {
+    if (confirm('Delete this maintenance window?')) {
+        MaintenanceManager.delete(id);
+        showToast('Maintenance deleted', 'success');
+        refreshMaintenanceTable();
+    }
+}
+
+// ============================================
+// IP History UI
+// ============================================
+
+function showIPHistoryModal(ipAddress) {
+    const history = IPHistory.getByIP(ipAddress, 50);
+    const timeline = IPHistory.getAssignmentTimeline(ipAddress);
+
+    const content = document.getElementById('ipHistoryContent');
+    if (!content) return;
+
+    if (history.length === 0) {
+        content.innerHTML = '<p class="empty-state">No history recorded for this IP</p>';
+    } else {
+        content.innerHTML = `
+            <div class="ip-history-header">
+                <h4>${ipAddress}</h4>
+                <p class="text-muted">${history.length} events recorded</p>
+            </div>
+
+            ${timeline.length > 0 ? `
+                <div class="ip-timeline-summary">
+                    <h5>Assignment Timeline</h5>
+                    <div class="timeline-list">
+                        ${timeline.map(t => `
+                            <div class="timeline-item">
+                                <span class="timeline-host">${t.hostName || 'Unknown'}</span>
+                                <span class="timeline-dates">
+                                    ${new Date(t.startDate).toLocaleDateString()} -
+                                    ${t.endDate ? new Date(t.endDate).toLocaleDateString() : 'Present'}
+                                </span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : ''}
+
+            <div class="ip-history-events">
+                <h5>Event Log</h5>
+                ${history.map(h => `
+                    <div class="history-event ${h.action}">
+                        <div class="event-icon ${h.action}">
+                            ${h.action === 'assigned' ? '➕' : h.action === 'released' ? '➖' : '🔄'}
+                        </div>
+                        <div class="event-details">
+                            <div class="event-action">
+                                ${h.action.charAt(0).toUpperCase() + h.action.slice(1)}
+                                ${h.hostName ? ` to <strong>${h.hostName}</strong>` : ''}
+                                ${h.previousHostName ? ` (from ${h.previousHostName})` : ''}
+                            </div>
+                            <div class="event-time">${new Date(h.timestamp).toLocaleString()}</div>
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+    }
+
+    openModal('ipHistoryModal');
+}
+
+function refreshIPHistoryPage() {
+    const container = document.getElementById('ipHistoryList');
+    if (!container) return;
+
+    const recentHistory = IPHistory.getRecent(100);
+    const stats = IPHistory.getStats();
+
+    // Update stats
+    const statsContainer = document.getElementById('ipHistoryStats');
+    if (statsContainer) {
+        statsContainer.innerHTML = `
+            <div class="stat-mini">
+                <span class="stat-value">${stats.totalEntries}</span>
+                <span class="stat-label">Total Events</span>
+            </div>
+            <div class="stat-mini">
+                <span class="stat-value">${stats.uniqueIPs}</span>
+                <span class="stat-label">Unique IPs</span>
+            </div>
+            <div class="stat-mini">
+                <span class="stat-value">${stats.totalAssignments}</span>
+                <span class="stat-label">Assignments</span>
+            </div>
+            <div class="stat-mini">
+                <span class="stat-value">${stats.recentActivity}</span>
+                <span class="stat-label">Last 30 Days</span>
+            </div>
+        `;
+    }
+
+    if (recentHistory.length === 0) {
+        container.innerHTML = '<p class="empty-state">No IP history recorded yet</p>';
+        return;
+    }
+
+    container.innerHTML = recentHistory.map(h => `
+        <div class="history-event-row ${h.action}">
+            <div class="event-ip" onclick="showIPHistoryModal('${h.ipAddress}')">${h.ipAddress}</div>
+            <div class="event-action-badge ${h.action}">${h.action}</div>
+            <div class="event-host">${h.hostName || '-'}</div>
+            <div class="event-time">${new Date(h.timestamp).toLocaleString()}</div>
+        </div>
+    `).join('');
+}
+
+// ============================================
+// Hardware Lifecycle UI
+// ============================================
+
+function refreshLifecycleDashboard() {
+    const container = document.getElementById('lifecycleContent');
+    if (!container) return;
+
+    const summary = HardwareLifecycle.getSummary();
+    const needsAttention = HardwareLifecycle.getHostsNeedingAttention();
+    const warrantySoon = HardwareLifecycle.getWarrantyExpiringSoon(30);
+    const eolSoon = HardwareLifecycle.getEOLSoon(180);
+
+    container.innerHTML = `
+        <div class="lifecycle-stats">
+            <div class="lifecycle-stat">
+                <span class="stat-value">${summary.total}</span>
+                <span class="stat-label">Total Hosts</span>
+            </div>
+            <div class="lifecycle-stat">
+                <span class="stat-value">${summary.withLifecycleData}</span>
+                <span class="stat-label">With Lifecycle Data</span>
+            </div>
+            <div class="lifecycle-stat success">
+                <span class="stat-value">${summary.underWarranty}</span>
+                <span class="stat-label">Under Warranty</span>
+            </div>
+            <div class="lifecycle-stat warning">
+                <span class="stat-value">${summary.warrantyExpiringSoon}</span>
+                <span class="stat-label">Warranty Expiring</span>
+            </div>
+            <div class="lifecycle-stat danger">
+                <span class="stat-value">${summary.outOfWarranty}</span>
+                <span class="stat-label">Out of Warranty</span>
+            </div>
+            <div class="lifecycle-stat danger">
+                <span class="stat-value">${summary.eol}</span>
+                <span class="stat-label">End of Life</span>
+            </div>
+            <div class="lifecycle-stat">
+                <span class="stat-value">${summary.averageAge} yrs</span>
+                <span class="stat-label">Average Age</span>
+            </div>
+        </div>
+
+        ${needsAttention.length > 0 ? `
+            <div class="lifecycle-alerts">
+                <h4>Hosts Needing Attention</h4>
+                <div class="alert-list">
+                    ${needsAttention.map(host => `
+                        <div class="alert-item" style="border-left: 3px solid ${host.lifecycleAlert.color}">
+                            <div class="alert-icon">${host.lifecycleAlert.icon}</div>
+                            <div class="alert-details">
+                                <strong>${host.vmName}</strong>
+                                <span class="alert-status" style="color: ${host.lifecycleAlert.color}">
+                                    ${host.lifecycleAlert.name}
+                                </span>
+                                ${host.warrantyExpiry ? `<span class="alert-date">Warranty: ${new Date(host.warrantyExpiry).toLocaleDateString()}</span>` : ''}
+                                ${host.eolDate ? `<span class="alert-date">EOL: ${new Date(host.eolDate).toLocaleDateString()}</span>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        ` : ''}
+
+        ${warrantySoon.length > 0 ? `
+            <div class="lifecycle-section">
+                <h4>Warranty Expiring in 30 Days</h4>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Host</th>
+                            <th>Vendor</th>
+                            <th>Warranty Expiry</th>
+                            <th>Days Left</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${warrantySoon.map(host => `
+                            <tr>
+                                <td>${host.vmName}</td>
+                                <td>${host.vendor || '-'}</td>
+                                <td>${new Date(host.warrantyExpiry).toLocaleDateString()}</td>
+                                <td><span class="days-badge warning">${HardwareLifecycle.getDaysUntilWarrantyExpiry(host.warrantyExpiry)} days</span></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        ` : ''}
+
+        ${eolSoon.length > 0 ? `
+            <div class="lifecycle-section">
+                <h4>End of Life in 6 Months</h4>
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Host</th>
+                            <th>Model</th>
+                            <th>EOL Date</th>
+                            <th>Days Left</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${eolSoon.map(host => `
+                            <tr>
+                                <td>${host.vmName}</td>
+                                <td>${host.model || '-'}</td>
+                                <td>${new Date(host.eolDate).toLocaleDateString()}</td>
+                                <td><span class="days-badge danger">${HardwareLifecycle.getDaysUntilEOL(host.eolDate)} days</span></td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        ` : ''}
+    `;
+}
+
+function getLifecycleStatusBadge(host) {
+    const status = HardwareLifecycle.getStatus(host);
+    if (!status) return '';
+
+    return `<span class="lifecycle-badge" style="background: ${status.color}20; color: ${status.color}">
+        ${status.icon} ${status.name}
+    </span>`;
+}
+
+// ============================================
 // Initialize Application
 // ============================================
 
@@ -4199,5 +5200,5 @@ document.addEventListener('DOMContentLoaded', () => {
 
     refreshDashboard();
     refreshConflictsPanel();
-    console.log('NetManager v4.0 initialized with VLAN, IP Ranges, Templates, Reservations, Conflict Detection, Audit Log, Dark Mode, and Subnet Calculator');
+    console.log('NetManager v5.0 initialized with VLAN, IP Ranges, Templates, Reservations, Conflict Detection, Audit Log, Dark Mode, Subnet Calculator, IP History, Hardware Lifecycle, and Maintenance Windows');
 });
