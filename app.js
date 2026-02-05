@@ -20,7 +20,9 @@ const DB = {
         AUDIT_LOG: 'ipdb_audit_log',
         SETTINGS: 'ipdb_settings',
         IP_HISTORY: 'ipdb_ip_history',
-        MAINTENANCE_WINDOWS: 'ipdb_maintenance_windows'
+        MAINTENANCE_WINDOWS: 'ipdb_maintenance_windows',
+        LOCATIONS: 'ipdb_locations',
+        SAVED_FILTERS: 'ipdb_saved_filters'
     },
 
     get(key) {
@@ -1293,6 +1295,937 @@ const MaintenanceManager = {
 };
 
 // ============================================
+// Location & Rack Management
+// ============================================
+
+const LocationManager = {
+    getAll() {
+        return DB.get(DB.KEYS.LOCATIONS);
+    },
+
+    getById(id) {
+        const locations = DB.get(DB.KEYS.LOCATIONS);
+        return locations.find(l => l.id === id);
+    },
+
+    getDatacenters() {
+        const locations = this.getAll();
+        return [...new Set(locations.map(l => l.datacenter).filter(Boolean))];
+    },
+
+    getBuildings(datacenter = null) {
+        const locations = this.getAll();
+        const filtered = datacenter ? locations.filter(l => l.datacenter === datacenter) : locations;
+        return [...new Set(filtered.map(l => l.building).filter(Boolean))];
+    },
+
+    getRooms(datacenter = null, building = null) {
+        let locations = this.getAll();
+        if (datacenter) locations = locations.filter(l => l.datacenter === datacenter);
+        if (building) locations = locations.filter(l => l.building === building);
+        return [...new Set(locations.map(l => l.room).filter(Boolean))];
+    },
+
+    getRacks(datacenter = null, building = null, room = null) {
+        let locations = this.getAll();
+        if (datacenter) locations = locations.filter(l => l.datacenter === datacenter);
+        if (building) locations = locations.filter(l => l.building === building);
+        if (room) locations = locations.filter(l => l.room === room);
+        return locations.filter(l => l.type === 'rack');
+    },
+
+    add(data) {
+        const locations = DB.get(DB.KEYS.LOCATIONS);
+
+        const newLocation = {
+            id: DB.generateId(),
+            type: data.type || 'rack', // 'datacenter', 'building', 'room', 'rack'
+            name: data.name,
+            datacenter: data.datacenter || '',
+            building: data.building || '',
+            room: data.room || '',
+            rackUnits: parseInt(data.rackUnits) || 42,
+            description: data.description || '',
+            address: data.address || '',
+            contactName: data.contactName || '',
+            contactPhone: data.contactPhone || '',
+            contactEmail: data.contactEmail || '',
+            createdAt: new Date().toISOString()
+        };
+
+        locations.push(newLocation);
+        DB.set(DB.KEYS.LOCATIONS, locations);
+
+        AuditLog.log('create', 'location', newLocation.id,
+            `Created location: ${newLocation.name}`, null, newLocation);
+
+        return { success: true, location: newLocation };
+    },
+
+    update(id, updates) {
+        const locations = DB.get(DB.KEYS.LOCATIONS);
+        const index = locations.findIndex(l => l.id === id);
+
+        if (index === -1) {
+            return { success: false, message: 'Location not found' };
+        }
+
+        const oldLocation = { ...locations[index] };
+        locations[index] = { ...locations[index], ...updates, updatedAt: new Date().toISOString() };
+        DB.set(DB.KEYS.LOCATIONS, locations);
+
+        AuditLog.log('update', 'location', id,
+            `Updated location: ${locations[index].name}`, oldLocation, locations[index]);
+
+        return { success: true, location: locations[index] };
+    },
+
+    delete(id) {
+        const locations = DB.get(DB.KEYS.LOCATIONS);
+        const location = locations.find(l => l.id === id);
+
+        if (!location) {
+            return { success: false, message: 'Location not found' };
+        }
+
+        // Check if any hosts are using this location
+        const hosts = DB.get(DB.KEYS.HOSTS);
+        const hostsUsingLocation = hosts.filter(h => h.locationId === id);
+        if (hostsUsingLocation.length > 0) {
+            return { success: false, message: `Cannot delete: ${hostsUsingLocation.length} hosts are in this location` };
+        }
+
+        const filtered = locations.filter(l => l.id !== id);
+        DB.set(DB.KEYS.LOCATIONS, filtered);
+
+        AuditLog.log('delete', 'location', id,
+            `Deleted location: ${location.name}`, location, null);
+
+        return { success: true };
+    },
+
+    getHostsInRack(rackId) {
+        const hosts = DB.get(DB.KEYS.HOSTS);
+        return hosts.filter(h => h.locationId === rackId).sort((a, b) => (a.uPosition || 0) - (b.uPosition || 0));
+    },
+
+    getRackUtilization(rackId) {
+        const rack = this.getById(rackId);
+        if (!rack) return null;
+
+        const hosts = this.getHostsInRack(rackId);
+        const usedUnits = hosts.reduce((sum, h) => sum + (h.uHeight || 1), 0);
+        const totalUnits = rack.rackUnits || 42;
+
+        return {
+            total: totalUnits,
+            used: usedUnits,
+            available: totalUnits - usedUnits,
+            percentage: Math.round((usedUnits / totalUnits) * 100)
+        };
+    },
+
+    getRackVisualization(rackId) {
+        const rack = this.getById(rackId);
+        if (!rack) return null;
+
+        const hosts = this.getHostsInRack(rackId);
+        const totalUnits = rack.rackUnits || 42;
+        const units = [];
+
+        for (let i = totalUnits; i >= 1; i--) {
+            const hostInUnit = hosts.find(h => {
+                const startU = h.uPosition || 0;
+                const height = h.uHeight || 1;
+                return i >= startU && i < startU + height;
+            });
+
+            units.push({
+                position: i,
+                host: hostInUnit || null,
+                isStartUnit: hostInUnit ? hostInUnit.uPosition === i : false
+            });
+        }
+
+        return { rack, units, hosts };
+    }
+};
+
+// ============================================
+// Global Search
+// ============================================
+
+const GlobalSearch = {
+    search(query) {
+        if (!query || query.length < 2) return [];
+
+        const q = query.toLowerCase();
+        const results = [];
+
+        // Search hosts
+        const hosts = DB.get(DB.KEYS.HOSTS);
+        hosts.forEach(host => {
+            if (host.vmName?.toLowerCase().includes(q) ||
+                host.operatingSystem?.toLowerCase().includes(q) ||
+                host.description?.toLowerCase().includes(q) ||
+                host.serialNumber?.toLowerCase().includes(q) ||
+                host.assetTag?.toLowerCase().includes(q)) {
+                results.push({
+                    type: 'host',
+                    id: host.id,
+                    title: host.vmName,
+                    subtitle: host.operatingSystem || host.hostType,
+                    icon: '💻',
+                    page: 'hosts'
+                });
+            }
+        });
+
+        // Search IPs
+        const ips = DB.get(DB.KEYS.IPS);
+        ips.forEach(ip => {
+            if (ip.ipAddress?.toLowerCase().includes(q) ||
+                ip.dnsName?.toLowerCase().includes(q)) {
+                const host = hosts.find(h => h.id === ip.hostId);
+                results.push({
+                    type: 'ip',
+                    id: ip.id,
+                    title: ip.ipAddress,
+                    subtitle: ip.dnsName || (host ? host.vmName : 'Unassigned'),
+                    icon: '🌐',
+                    page: 'ipam'
+                });
+            }
+        });
+
+        // Search subnets
+        const subnets = DB.get(DB.KEYS.SUBNETS);
+        subnets.forEach(subnet => {
+            const networkStr = `${subnet.networkAddress}/${subnet.cidr}`;
+            if (networkStr.includes(q) ||
+                subnet.name?.toLowerCase().includes(q) ||
+                subnet.description?.toLowerCase().includes(q)) {
+                results.push({
+                    type: 'subnet',
+                    id: subnet.id,
+                    title: networkStr,
+                    subtitle: subnet.name || subnet.description || '',
+                    icon: '🔗',
+                    page: 'subnets'
+                });
+            }
+        });
+
+        // Search VLANs
+        const vlans = DB.get(DB.KEYS.VLANS);
+        vlans.forEach(vlan => {
+            if (vlan.vlanId?.toString().includes(q) ||
+                vlan.name?.toLowerCase().includes(q) ||
+                vlan.description?.toLowerCase().includes(q)) {
+                results.push({
+                    type: 'vlan',
+                    id: vlan.id,
+                    title: `VLAN ${vlan.vlanId}`,
+                    subtitle: vlan.name,
+                    icon: '📡',
+                    page: 'vlans'
+                });
+            }
+        });
+
+        // Search companies
+        const companies = DB.get(DB.KEYS.COMPANIES);
+        companies.forEach(company => {
+            if (company.name?.toLowerCase().includes(q) ||
+                company.contactName?.toLowerCase().includes(q)) {
+                results.push({
+                    type: 'company',
+                    id: company.id,
+                    title: company.name,
+                    subtitle: company.contactName || '',
+                    icon: '🏢',
+                    page: 'companies'
+                });
+            }
+        });
+
+        // Search locations
+        const locations = DB.get(DB.KEYS.LOCATIONS);
+        locations.forEach(location => {
+            if (location.name?.toLowerCase().includes(q) ||
+                location.datacenter?.toLowerCase().includes(q) ||
+                location.room?.toLowerCase().includes(q)) {
+                results.push({
+                    type: 'location',
+                    id: location.id,
+                    title: location.name,
+                    subtitle: `${location.datacenter || ''} ${location.room || ''}`.trim(),
+                    icon: '📍',
+                    page: 'locations'
+                });
+            }
+        });
+
+        return results.slice(0, 20); // Limit results
+    }
+};
+
+// ============================================
+// Saved Filters
+// ============================================
+
+const SavedFilters = {
+    getAll() {
+        return DB.get(DB.KEYS.SAVED_FILTERS);
+    },
+
+    getByPage(page) {
+        const filters = this.getAll();
+        return filters.filter(f => f.page === page);
+    },
+
+    getById(id) {
+        const filters = this.getAll();
+        return filters.find(f => f.id === id);
+    },
+
+    save(name, page, filterState) {
+        const filters = DB.get(DB.KEYS.SAVED_FILTERS);
+
+        const newFilter = {
+            id: DB.generateId(),
+            name: name,
+            page: page,
+            filters: filterState,
+            createdAt: new Date().toISOString()
+        };
+
+        filters.push(newFilter);
+        DB.set(DB.KEYS.SAVED_FILTERS, filters);
+
+        return { success: true, filter: newFilter };
+    },
+
+    update(id, name) {
+        const filters = DB.get(DB.KEYS.SAVED_FILTERS);
+        const index = filters.findIndex(f => f.id === id);
+
+        if (index === -1) {
+            return { success: false, message: 'Filter not found' };
+        }
+
+        filters[index].name = name;
+        filters[index].updatedAt = new Date().toISOString();
+        DB.set(DB.KEYS.SAVED_FILTERS, filters);
+
+        return { success: true };
+    },
+
+    delete(id) {
+        const filters = DB.get(DB.KEYS.SAVED_FILTERS);
+        const filtered = filters.filter(f => f.id !== id);
+        DB.set(DB.KEYS.SAVED_FILTERS, filtered);
+        return { success: true };
+    },
+
+    getCurrentFilterState(page) {
+        const state = {};
+
+        switch(page) {
+            case 'hosts':
+                state.search = document.getElementById('hostSearch')?.value || '';
+                state.state = document.getElementById('hostStateFilter')?.value || '';
+                state.company = document.getElementById('hostCompanyFilter')?.value || '';
+                state.type = document.getElementById('hostTypeFilter')?.value || '';
+                break;
+            case 'ipam':
+                state.search = document.getElementById('ipSearch')?.value || '';
+                state.subnet = document.getElementById('ipSubnetFilter')?.value || '';
+                state.status = document.getElementById('ipStatusFilter')?.value || '';
+                break;
+            case 'vlans':
+                state.search = document.getElementById('vlanSearch')?.value || '';
+                state.type = document.getElementById('vlanTypeFilter')?.value || '';
+                state.company = document.getElementById('vlanCompanyFilter')?.value || '';
+                break;
+        }
+
+        return state;
+    },
+
+    applyFilterState(page, state) {
+        switch(page) {
+            case 'hosts':
+                if (state.search) document.getElementById('hostSearch').value = state.search;
+                if (state.state) document.getElementById('hostStateFilter').value = state.state;
+                if (state.company) document.getElementById('hostCompanyFilter').value = state.company;
+                if (state.type) document.getElementById('hostTypeFilter').value = state.type;
+                refreshHostsTable();
+                break;
+            case 'ipam':
+                if (state.search) document.getElementById('ipSearch').value = state.search;
+                if (state.subnet) document.getElementById('ipSubnetFilter').value = state.subnet;
+                if (state.status) document.getElementById('ipStatusFilter').value = state.status;
+                refreshIPsTable();
+                break;
+            case 'vlans':
+                if (state.search) document.getElementById('vlanSearch').value = state.search;
+                if (state.type) document.getElementById('vlanTypeFilter').value = state.type;
+                if (state.company) document.getElementById('vlanCompanyFilter').value = state.company;
+                refreshVLANsTable();
+                break;
+        }
+    }
+};
+
+// ============================================
+// Keyboard Shortcuts
+// ============================================
+
+const KeyboardShortcuts = {
+    enabled: true,
+    pendingKey: null,
+    shortcuts: {
+        // Navigation shortcuts (g + key)
+        'g+d': { action: () => navigateTo('dashboard'), description: 'Go to Dashboard' },
+        'g+h': { action: () => navigateTo('hosts'), description: 'Go to Hosts' },
+        'g+i': { action: () => navigateTo('ipam'), description: 'Go to IP Addresses' },
+        'g+s': { action: () => navigateTo('subnets'), description: 'Go to Subnets' },
+        'g+v': { action: () => navigateTo('vlans'), description: 'Go to VLANs' },
+        'g+c': { action: () => navigateTo('companies'), description: 'Go to Companies' },
+        'g+l': { action: () => navigateTo('locations'), description: 'Go to Locations' },
+        'g+m': { action: () => navigateTo('maintenance'), description: 'Go to Maintenance' },
+
+        // Action shortcuts
+        '/': { action: () => focusGlobalSearch(), description: 'Focus search' },
+        'n': { action: () => handleNewAction(), description: 'New item (context-aware)' },
+        'Escape': { action: () => closeModal(), description: 'Close modal' },
+        '?': { action: () => showKeyboardShortcutsHelp(), description: 'Show shortcuts help' },
+
+        // Utility shortcuts
+        'r': { action: () => refreshCurrentPage(), description: 'Refresh current page' },
+        't': { action: () => toggleDarkMode(), description: 'Toggle dark mode' },
+    },
+
+    init() {
+        document.addEventListener('keydown', (e) => this.handleKeydown(e));
+    },
+
+    handleKeydown(e) {
+        if (!this.enabled) return;
+
+        // Don't trigger shortcuts when typing in inputs
+        const activeElement = document.activeElement;
+        const isInput = activeElement.tagName === 'INPUT' ||
+                       activeElement.tagName === 'TEXTAREA' ||
+                       activeElement.tagName === 'SELECT' ||
+                       activeElement.isContentEditable;
+
+        // Allow Escape in inputs to blur
+        if (e.key === 'Escape') {
+            if (isInput) {
+                activeElement.blur();
+            } else {
+                closeModal();
+            }
+            return;
+        }
+
+        // Allow / to focus search even from anywhere
+        if (e.key === '/' && !isInput) {
+            e.preventDefault();
+            focusGlobalSearch();
+            return;
+        }
+
+        // Skip other shortcuts if in input
+        if (isInput) return;
+
+        const key = e.key.toLowerCase();
+
+        // Handle 'g' prefix for navigation
+        if (this.pendingKey === 'g') {
+            const combo = `g+${key}`;
+            if (this.shortcuts[combo]) {
+                e.preventDefault();
+                this.shortcuts[combo].action();
+            }
+            this.pendingKey = null;
+            return;
+        }
+
+        if (key === 'g') {
+            this.pendingKey = 'g';
+            setTimeout(() => { this.pendingKey = null; }, 1000);
+            return;
+        }
+
+        // Handle single-key shortcuts
+        if (this.shortcuts[key]) {
+            e.preventDefault();
+            this.shortcuts[key].action();
+        }
+
+        // Handle ? for help
+        if (e.key === '?' || (e.shiftKey && key === '/')) {
+            e.preventDefault();
+            showKeyboardShortcutsHelp();
+        }
+    },
+
+    getShortcutsList() {
+        return Object.entries(this.shortcuts).map(([key, value]) => ({
+            key: key,
+            description: value.description
+        }));
+    }
+};
+
+// ============================================
+// Context Menu (Quick Actions)
+// ============================================
+
+const ContextMenu = {
+    element: null,
+    currentTarget: null,
+    currentType: null,
+    currentId: null,
+
+    init() {
+        // Create context menu element
+        this.element = document.createElement('div');
+        this.element.id = 'contextMenu';
+        this.element.className = 'context-menu';
+        this.element.innerHTML = '<ul class="context-menu-list"></ul>';
+        document.body.appendChild(this.element);
+
+        // Close on click outside
+        document.addEventListener('click', () => this.hide());
+        document.addEventListener('contextmenu', (e) => {
+            // Check if right-clicked on a table row with data attributes
+            const row = e.target.closest('tr[data-id]');
+            if (row) {
+                e.preventDefault();
+                this.show(e, row);
+            }
+        });
+    },
+
+    show(event, row) {
+        const type = row.dataset.type || this.detectType(row);
+        const id = row.dataset.id;
+
+        if (!type || !id) return;
+
+        this.currentTarget = row;
+        this.currentType = type;
+        this.currentId = id;
+
+        const menuItems = this.getMenuItems(type, id);
+        const list = this.element.querySelector('.context-menu-list');
+        list.innerHTML = menuItems.map(item => {
+            if (item.separator) {
+                return '<li class="context-menu-separator"></li>';
+            }
+            return `<li class="context-menu-item" onclick="ContextMenu.executeAction('${item.action}')">
+                <span class="context-menu-icon">${item.icon}</span>
+                <span>${item.label}</span>
+            </li>`;
+        }).join('');
+
+        // Position menu
+        const x = event.clientX;
+        const y = event.clientY;
+        this.element.style.left = `${x}px`;
+        this.element.style.top = `${y}px`;
+        this.element.classList.add('visible');
+
+        // Adjust if off-screen
+        const rect = this.element.getBoundingClientRect();
+        if (rect.right > window.innerWidth) {
+            this.element.style.left = `${x - rect.width}px`;
+        }
+        if (rect.bottom > window.innerHeight) {
+            this.element.style.top = `${y - rect.height}px`;
+        }
+    },
+
+    hide() {
+        if (this.element) {
+            this.element.classList.remove('visible');
+        }
+    },
+
+    detectType(row) {
+        const table = row.closest('table');
+        if (!table) return null;
+
+        const tableId = table.id;
+        if (tableId.includes('host')) return 'host';
+        if (tableId.includes('ip')) return 'ip';
+        if (tableId.includes('subnet')) return 'subnet';
+        if (tableId.includes('vlan')) return 'vlan';
+        if (tableId.includes('company')) return 'company';
+        if (tableId.includes('location')) return 'location';
+
+        return null;
+    },
+
+    getMenuItems(type, id) {
+        const baseItems = [
+            { icon: '✏️', label: 'Edit', action: 'edit' },
+            { icon: '📋', label: 'Copy ID', action: 'copyId' },
+        ];
+
+        const typeSpecificItems = {
+            host: [
+                { icon: '🌐', label: 'View IPs', action: 'viewIPs' },
+                { icon: '📋', label: 'Copy Hostname', action: 'copyHostname' },
+                { separator: true },
+                { icon: '🔄', label: 'Toggle State', action: 'toggleState' },
+            ],
+            ip: [
+                { icon: '📋', label: 'Copy IP', action: 'copyIP' },
+                { icon: '📜', label: 'View History', action: 'viewHistory' },
+                { separator: true },
+                { icon: '🔗', label: 'Assign to Host', action: 'assignToHost' },
+            ],
+            subnet: [
+                { icon: '📋', label: 'Copy Network', action: 'copyNetwork' },
+                { icon: '🔢', label: 'View IPs', action: 'viewSubnetIPs' },
+                { separator: true },
+                { icon: '📝', label: 'Apply Template', action: 'applyTemplate' },
+            ],
+            vlan: [
+                { icon: '📋', label: 'Copy VLAN ID', action: 'copyVlanId' },
+                { icon: '🔗', label: 'View Subnets', action: 'viewVlanSubnets' },
+            ],
+            company: [
+                { icon: '📋', label: 'Copy Name', action: 'copyCompanyName' },
+                { icon: '👥', label: 'View Hosts', action: 'viewCompanyHosts' },
+            ],
+            location: [
+                { icon: '📋', label: 'Copy Location', action: 'copyLocation' },
+                { icon: '🖥️', label: 'View Rack', action: 'viewRack' },
+            ]
+        };
+
+        const items = [...baseItems];
+        if (typeSpecificItems[type]) {
+            items.push({ separator: true });
+            items.push(...typeSpecificItems[type]);
+        }
+        items.push({ separator: true });
+        items.push({ icon: '🗑️', label: 'Delete', action: 'delete' });
+
+        return items;
+    },
+
+    executeAction(action) {
+        const type = this.currentType;
+        const id = this.currentId;
+        this.hide();
+
+        switch(action) {
+            case 'edit':
+                this.editItem(type, id);
+                break;
+            case 'delete':
+                this.deleteItem(type, id);
+                break;
+            case 'copyId':
+                navigator.clipboard.writeText(id);
+                showToast('ID copied to clipboard', 'success');
+                break;
+            case 'copyHostname':
+                const host = HostManager.getById(id);
+                if (host) {
+                    navigator.clipboard.writeText(host.vmName);
+                    showToast('Hostname copied', 'success');
+                }
+                break;
+            case 'copyIP':
+                const ip = IPManager.getById(id);
+                if (ip) {
+                    navigator.clipboard.writeText(ip.ipAddress);
+                    showToast('IP copied', 'success');
+                }
+                break;
+            case 'copyNetwork':
+                const subnet = SubnetManager.getById(id);
+                if (subnet) {
+                    navigator.clipboard.writeText(`${subnet.networkAddress}/${subnet.cidr}`);
+                    showToast('Network copied', 'success');
+                }
+                break;
+            case 'copyVlanId':
+                const vlan = VLANManager.getById(id);
+                if (vlan) {
+                    navigator.clipboard.writeText(vlan.vlanId.toString());
+                    showToast('VLAN ID copied', 'success');
+                }
+                break;
+            case 'copyCompanyName':
+                const company = CompanyManager.getById(id);
+                if (company) {
+                    navigator.clipboard.writeText(company.name);
+                    showToast('Company name copied', 'success');
+                }
+                break;
+            case 'copyLocation':
+                const location = LocationManager.getById(id);
+                if (location) {
+                    navigator.clipboard.writeText(location.name);
+                    showToast('Location copied', 'success');
+                }
+                break;
+            case 'viewIPs':
+                navigateTo('ipam');
+                setTimeout(() => {
+                    const hostObj = HostManager.getById(id);
+                    if (hostObj) {
+                        document.getElementById('ipSearch').value = hostObj.vmName;
+                        refreshIPsTable();
+                    }
+                }, 100);
+                break;
+            case 'viewHistory':
+                showIPHistory(id);
+                break;
+            case 'toggleState':
+                const hostToToggle = HostManager.getById(id);
+                if (hostToToggle) {
+                    const newState = hostToToggle.state === 'running' ? 'stopped' : 'running';
+                    HostManager.update(id, { state: newState });
+                    refreshHostsTable();
+                    showToast(`Host state changed to ${newState}`, 'success');
+                }
+                break;
+            case 'viewSubnetIPs':
+                navigateTo('ipam');
+                setTimeout(() => {
+                    document.getElementById('ipSubnetFilter').value = id;
+                    refreshIPsTable();
+                }, 100);
+                break;
+            case 'viewVlanSubnets':
+                navigateTo('subnets');
+                setTimeout(() => {
+                    const vlanObj = VLANManager.getById(id);
+                    if (vlanObj) {
+                        document.getElementById('subnetSearch').value = `VLAN ${vlanObj.vlanId}`;
+                        refreshSubnetsTable();
+                    }
+                }, 100);
+                break;
+            case 'viewCompanyHosts':
+                navigateTo('hosts');
+                setTimeout(() => {
+                    document.getElementById('hostCompanyFilter').value = id;
+                    refreshHostsTable();
+                }, 100);
+                break;
+            case 'viewRack':
+                showRackVisualization(id);
+                break;
+            case 'assignToHost':
+                showAssignIPModal(id);
+                break;
+            case 'applyTemplate':
+                showApplyTemplateModal(id);
+                break;
+        }
+    },
+
+    editItem(type, id) {
+        switch(type) {
+            case 'host':
+                editHost(id);
+                break;
+            case 'ip':
+                editIP(id);
+                break;
+            case 'subnet':
+                editSubnet(id);
+                break;
+            case 'vlan':
+                editVLAN(id);
+                break;
+            case 'company':
+                editCompany(id);
+                break;
+            case 'location':
+                editLocation(id);
+                break;
+        }
+    },
+
+    deleteItem(type, id) {
+        let itemName = '';
+        let deleteFunc = null;
+        let refreshFunc = null;
+
+        switch(type) {
+            case 'host':
+                const host = HostManager.getById(id);
+                itemName = host?.vmName || 'this host';
+                deleteFunc = () => HostManager.delete(id);
+                refreshFunc = refreshHostsTable;
+                break;
+            case 'ip':
+                const ip = IPManager.getById(id);
+                itemName = ip?.ipAddress || 'this IP';
+                deleteFunc = () => IPManager.delete(id);
+                refreshFunc = refreshIPsTable;
+                break;
+            case 'subnet':
+                const subnet = SubnetManager.getById(id);
+                itemName = subnet ? `${subnet.networkAddress}/${subnet.cidr}` : 'this subnet';
+                deleteFunc = () => SubnetManager.delete(id);
+                refreshFunc = refreshSubnetsTable;
+                break;
+            case 'vlan':
+                const vlan = VLANManager.getById(id);
+                itemName = vlan ? `VLAN ${vlan.vlanId}` : 'this VLAN';
+                deleteFunc = () => VLANManager.delete(id);
+                refreshFunc = refreshVLANsTable;
+                break;
+            case 'company':
+                const company = CompanyManager.getById(id);
+                itemName = company?.name || 'this company';
+                deleteFunc = () => CompanyManager.delete(id);
+                refreshFunc = refreshCompaniesTable;
+                break;
+            case 'location':
+                const location = LocationManager.getById(id);
+                itemName = location?.name || 'this location';
+                deleteFunc = () => LocationManager.delete(id);
+                refreshFunc = refreshLocationsTable;
+                break;
+        }
+
+        if (confirm(`Are you sure you want to delete ${itemName}?`)) {
+            const result = deleteFunc();
+            if (result.success) {
+                showToast(`${itemName} deleted`, 'success');
+                if (refreshFunc) refreshFunc();
+            } else {
+                showToast(result.message || 'Delete failed', 'error');
+            }
+        }
+    }
+};
+
+// Helper functions for keyboard shortcuts
+function focusGlobalSearch() {
+    const searchInput = document.getElementById('globalSearch');
+    if (searchInput) {
+        searchInput.focus();
+        searchInput.select();
+    }
+}
+
+function handleNewAction() {
+    const activePage = document.querySelector('.page.active');
+    if (!activePage) return;
+
+    const pageId = activePage.id;
+    switch(pageId) {
+        case 'hosts':
+            showQuickAddModal();
+            break;
+        case 'ipam':
+            showReserveIPModal();
+            break;
+        case 'subnets':
+            showAddSubnetModal();
+            break;
+        case 'vlans':
+            showAddVLANModal();
+            break;
+        case 'companies':
+            showAddCompanyModal();
+            break;
+        case 'locations':
+            showAddLocationModal();
+            break;
+        case 'maintenance':
+            showMaintenanceModal();
+            break;
+    }
+}
+
+function refreshCurrentPage() {
+    const activePage = document.querySelector('.page.active');
+    if (!activePage) return;
+
+    const pageId = activePage.id;
+    switch(pageId) {
+        case 'dashboard':
+            refreshDashboard();
+            break;
+        case 'hosts':
+            refreshHostsTable();
+            break;
+        case 'ipam':
+            refreshIPsTable();
+            break;
+        case 'subnets':
+            refreshSubnetsTable();
+            break;
+        case 'vlans':
+            refreshVLANsTable();
+            break;
+        case 'companies':
+            refreshCompaniesTable();
+            break;
+        case 'locations':
+            refreshLocationsTable();
+            break;
+    }
+    showToast('Page refreshed', 'success');
+}
+
+function showKeyboardShortcutsHelp() {
+    const shortcuts = KeyboardShortcuts.getShortcutsList();
+
+    const modal = document.getElementById('keyboardShortcutsModal');
+    if (!modal) return;
+
+    const content = modal.querySelector('.shortcuts-list') || modal.querySelector('.modal-body');
+    if (content) {
+        content.innerHTML = `
+            <div class="shortcuts-grid">
+                <div class="shortcuts-section">
+                    <h4>Navigation</h4>
+                    <div class="shortcut-items">
+                        ${shortcuts.filter(s => s.key.startsWith('g+')).map(s => `
+                            <div class="shortcut-item">
+                                <kbd>${s.key.replace('+', '</kbd> + <kbd>')}</kbd>
+                                <span>${s.description}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                <div class="shortcuts-section">
+                    <h4>Actions</h4>
+                    <div class="shortcut-items">
+                        ${shortcuts.filter(s => !s.key.startsWith('g+')).map(s => `
+                            <div class="shortcut-item">
+                                <kbd>${s.key}</kbd>
+                                <span>${s.description}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    openModal('keyboardShortcutsModal');
+}
+
+// ============================================
 // Hardware Lifecycle Management
 // ============================================
 
@@ -2271,11 +3204,22 @@ function navigateTo(page) {
         case 'ipam':
             refreshIPsTable();
             populateAllFilters();
+            initIPAMCompactView();
+            break;
+        case 'vlans':
+            refreshVLANsTable();
+            populateCompanyFilters();
+            break;
+        case 'locations':
+            refreshLocationsTable();
             break;
         case 'import':
             populateImportCompanySelect();
             break;
     }
+
+    // Update saved filters dropdown for this page
+    updateSavedFiltersDropdown(page);
 }
 
 document.querySelectorAll('.nav-item').forEach(item => {
@@ -5217,6 +6161,379 @@ function getLifecycleStatusBadge(host) {
 }
 
 // ============================================
+// Location Management UI
+// ============================================
+
+function refreshLocationsTable() {
+    const locations = LocationManager.getAll();
+    const tbody = document.getElementById('locationsTableBody');
+    if (!tbody) return;
+
+    if (locations.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="7" class="empty-message">No locations configured. <a href="#" onclick="showAddLocationModal()">Add your first location</a></td></tr>`;
+        return;
+    }
+
+    tbody.innerHTML = locations.map(loc => {
+        const utilization = loc.type === 'rack' ? LocationManager.getRackUtilization(loc.id) : null;
+        return `
+            <tr data-id="${loc.id}" data-type="location">
+                <td><strong>${escapeHtml(loc.name)}</strong></td>
+                <td><span class="type-badge">${loc.type}</span></td>
+                <td>${escapeHtml(loc.datacenter || '-')}</td>
+                <td>${escapeHtml(loc.building || '-')}</td>
+                <td>${escapeHtml(loc.room || '-')}</td>
+                <td>
+                    ${utilization ? `
+                        <div class="utilization-bar-small">
+                            <div class="utilization-fill" style="width: ${utilization.percentage}%"></div>
+                            <span>${utilization.used}/${utilization.total}U (${utilization.percentage}%)</span>
+                        </div>
+                    ` : '-'}
+                </td>
+                <td class="action-buttons">
+                    ${loc.type === 'rack' ? `<button class="btn-icon" onclick="showRackVisualization('${loc.id}')" title="View Rack">🗄️</button>` : ''}
+                    <button class="btn-icon" onclick="editLocation('${loc.id}')" title="Edit">✏️</button>
+                    <button class="btn-icon danger" onclick="deleteLocation('${loc.id}')" title="Delete">🗑️</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function showAddLocationModal() {
+    document.getElementById('locationForm').reset();
+    document.getElementById('locationEditId').value = '';
+    document.getElementById('locationModalTitle').textContent = 'Add Location';
+    populateLocationDropdowns();
+    openModal('addLocationModal');
+}
+
+function populateLocationDropdowns() {
+    const datacenters = LocationManager.getDatacenters();
+    const buildings = LocationManager.getBuildings();
+    const rooms = LocationManager.getRooms();
+
+    const dcSelect = document.getElementById('locationDatacenter');
+    const dcList = document.getElementById('datacenterList');
+    if (dcList) {
+        dcList.innerHTML = datacenters.map(dc => `<option value="${escapeHtml(dc)}">`).join('');
+    }
+
+    const buildingList = document.getElementById('buildingList');
+    if (buildingList) {
+        buildingList.innerHTML = buildings.map(b => `<option value="${escapeHtml(b)}">`).join('');
+    }
+
+    const roomList = document.getElementById('roomList');
+    if (roomList) {
+        roomList.innerHTML = rooms.map(r => `<option value="${escapeHtml(r)}">`).join('');
+    }
+}
+
+function editLocation(id) {
+    const location = LocationManager.getById(id);
+    if (!location) return;
+
+    document.getElementById('locationEditId').value = id;
+    document.getElementById('locationModalTitle').textContent = 'Edit Location';
+    document.getElementById('locationName').value = location.name;
+    document.getElementById('locationType').value = location.type;
+    document.getElementById('locationDatacenter').value = location.datacenter || '';
+    document.getElementById('locationBuilding').value = location.building || '';
+    document.getElementById('locationRoom').value = location.room || '';
+    document.getElementById('locationRackUnits').value = location.rackUnits || 42;
+    document.getElementById('locationDescription').value = location.description || '';
+    document.getElementById('locationContactName').value = location.contactName || '';
+    document.getElementById('locationContactEmail').value = location.contactEmail || '';
+    document.getElementById('locationContactPhone').value = location.contactPhone || '';
+
+    populateLocationDropdowns();
+    openModal('addLocationModal');
+}
+
+function saveLocation(event) {
+    event.preventDefault();
+
+    const editId = document.getElementById('locationEditId').value;
+    const data = {
+        name: document.getElementById('locationName').value,
+        type: document.getElementById('locationType').value,
+        datacenter: document.getElementById('locationDatacenter').value,
+        building: document.getElementById('locationBuilding').value,
+        room: document.getElementById('locationRoom').value,
+        rackUnits: document.getElementById('locationRackUnits').value,
+        description: document.getElementById('locationDescription').value,
+        contactName: document.getElementById('locationContactName').value,
+        contactEmail: document.getElementById('locationContactEmail').value,
+        contactPhone: document.getElementById('locationContactPhone').value
+    };
+
+    let result;
+    if (editId) {
+        result = LocationManager.update(editId, data);
+    } else {
+        result = LocationManager.add(data);
+    }
+
+    if (result.success) {
+        showToast(editId ? 'Location updated' : 'Location added', 'success');
+        closeModal();
+        refreshLocationsTable();
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+function deleteLocation(id) {
+    const location = LocationManager.getById(id);
+    if (!location) return;
+
+    if (confirm(`Are you sure you want to delete "${location.name}"?`)) {
+        const result = LocationManager.delete(id);
+        if (result.success) {
+            showToast('Location deleted', 'success');
+            refreshLocationsTable();
+        } else {
+            showToast(result.message, 'error');
+        }
+    }
+}
+
+function showRackVisualization(rackId) {
+    const visualization = LocationManager.getRackVisualization(rackId);
+    if (!visualization) return;
+
+    const { rack, units, hosts } = visualization;
+    const utilization = LocationManager.getRackUtilization(rackId);
+
+    const modal = document.getElementById('rackVisualizationModal');
+    if (!modal) return;
+
+    const content = modal.querySelector('.modal-body');
+    content.innerHTML = `
+        <div class="rack-visualization">
+            <div class="rack-header">
+                <h4>${escapeHtml(rack.name)}</h4>
+                <div class="rack-info">
+                    <span>Location: ${escapeHtml([rack.datacenter, rack.building, rack.room].filter(Boolean).join(' > ') || 'N/A')}</span>
+                    <span>Utilization: ${utilization.used}/${utilization.total}U (${utilization.percentage}%)</span>
+                </div>
+            </div>
+            <div class="rack-container">
+                <div class="rack-units">
+                    ${units.map(unit => {
+                        const isEmpty = !unit.host;
+                        const isStart = unit.isStartUnit;
+                        const height = unit.host?.uHeight || 1;
+
+                        if (unit.host && !isStart) {
+                            return ''; // Skip non-start units for multi-U devices
+                        }
+
+                        return `
+                            <div class="rack-unit ${isEmpty ? 'empty' : 'occupied'}"
+                                 style="${unit.host ? `height: ${height * 28}px` : ''}"
+                                 ${unit.host ? `title="${unit.host.vmName}"` : ''}>
+                                <span class="unit-number">${unit.position}</span>
+                                ${unit.host ? `
+                                    <div class="unit-device">
+                                        <span class="device-name">${escapeHtml(unit.host.vmName)}</span>
+                                        <span class="device-type">${unit.host.hostType || 'server'}</span>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            </div>
+            <div class="rack-legend">
+                <span><span class="legend-color empty"></span> Empty</span>
+                <span><span class="legend-color occupied"></span> Occupied</span>
+            </div>
+        </div>
+    `;
+
+    openModal('rackVisualizationModal');
+}
+
+// ============================================
+// Global Search UI
+// ============================================
+
+function initGlobalSearch() {
+    const searchInput = document.getElementById('globalSearch');
+    const resultsContainer = document.getElementById('globalSearchResults');
+
+    if (!searchInput || !resultsContainer) return;
+
+    let debounceTimer;
+
+    searchInput.addEventListener('input', (e) => {
+        clearTimeout(debounceTimer);
+        const query = e.target.value.trim();
+
+        if (query.length < 2) {
+            resultsContainer.classList.remove('visible');
+            return;
+        }
+
+        debounceTimer = setTimeout(() => {
+            const results = GlobalSearch.search(query);
+            renderSearchResults(results, resultsContainer);
+        }, 200);
+    });
+
+    searchInput.addEventListener('focus', () => {
+        if (searchInput.value.length >= 2) {
+            const results = GlobalSearch.search(searchInput.value);
+            renderSearchResults(results, resultsContainer);
+        }
+    });
+
+    searchInput.addEventListener('blur', () => {
+        // Delay hiding to allow clicking on results
+        setTimeout(() => {
+            resultsContainer.classList.remove('visible');
+        }, 200);
+    });
+
+    searchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            searchInput.blur();
+            resultsContainer.classList.remove('visible');
+        }
+    });
+}
+
+function renderSearchResults(results, container) {
+    if (results.length === 0) {
+        container.innerHTML = '<div class="search-no-results">No results found</div>';
+    } else {
+        container.innerHTML = results.map(result => `
+            <div class="search-result-item" onclick="navigateToSearchResult('${result.page}', '${result.id}', '${result.type}')">
+                <span class="search-result-icon">${result.icon}</span>
+                <div class="search-result-content">
+                    <span class="search-result-title">${escapeHtml(result.title)}</span>
+                    <span class="search-result-subtitle">${escapeHtml(result.subtitle)}</span>
+                </div>
+                <span class="search-result-type">${result.type}</span>
+            </div>
+        `).join('');
+    }
+    container.classList.add('visible');
+}
+
+function navigateToSearchResult(page, id, type) {
+    navigateTo(page);
+
+    // Highlight or scroll to the item after navigation
+    setTimeout(() => {
+        const row = document.querySelector(`tr[data-id="${id}"]`);
+        if (row) {
+            row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            row.classList.add('highlight');
+            setTimeout(() => row.classList.remove('highlight'), 2000);
+        }
+    }, 100);
+}
+
+// ============================================
+// Saved Filters UI
+// ============================================
+
+function updateSavedFiltersDropdown(page) {
+    const dropdown = document.getElementById('savedFiltersDropdown');
+    if (!dropdown) return;
+
+    const filters = SavedFilters.getByPage(page);
+    const select = dropdown.querySelector('select') || dropdown;
+
+    if (select.tagName === 'SELECT') {
+        select.innerHTML = `<option value="">Saved Filters</option>` +
+            filters.map(f => `<option value="${f.id}">${escapeHtml(f.name)}</option>`).join('');
+    }
+}
+
+function showSaveFilterModal() {
+    const activePage = document.querySelector('.page.active');
+    if (!activePage) return;
+
+    const pageId = activePage.id;
+    const supportedPages = ['hosts', 'ipam', 'vlans'];
+
+    if (!supportedPages.includes(pageId)) {
+        showToast('Filters not supported on this page', 'warning');
+        return;
+    }
+
+    const filterName = prompt('Enter a name for this filter:');
+    if (!filterName) return;
+
+    const filterState = SavedFilters.getCurrentFilterState(pageId);
+    const result = SavedFilters.save(filterName, pageId, filterState);
+
+    if (result.success) {
+        showToast('Filter saved', 'success');
+        updateSavedFiltersDropdown(pageId);
+    } else {
+        showToast('Failed to save filter', 'error');
+    }
+}
+
+function loadSavedFilter(filterId) {
+    if (!filterId) return;
+
+    const filter = SavedFilters.getById(filterId);
+    if (!filter) return;
+
+    SavedFilters.applyFilterState(filter.page, filter.filters);
+    showToast(`Loaded filter: ${filter.name}`, 'success');
+}
+
+function deleteSavedFilter(filterId) {
+    if (!filterId) return;
+
+    const filter = SavedFilters.getById(filterId);
+    if (!filter) return;
+
+    if (confirm(`Delete filter "${filter.name}"?`)) {
+        SavedFilters.delete(filterId);
+        showToast('Filter deleted', 'success');
+        updateSavedFiltersDropdown(filter.page);
+    }
+}
+
+function showManageFiltersModal() {
+    const activePage = document.querySelector('.page.active');
+    if (!activePage) return;
+
+    const pageId = activePage.id;
+    const filters = SavedFilters.getByPage(pageId);
+
+    const modal = document.getElementById('manageFiltersModal');
+    if (!modal) return;
+
+    const content = modal.querySelector('.modal-body');
+    content.innerHTML = filters.length === 0 ?
+        '<p class="empty-state">No saved filters for this page</p>' :
+        `<ul class="saved-filters-list">
+            ${filters.map(f => `
+                <li class="saved-filter-item">
+                    <span class="filter-name">${escapeHtml(f.name)}</span>
+                    <span class="filter-date">${new Date(f.createdAt).toLocaleDateString()}</span>
+                    <div class="filter-actions">
+                        <button class="btn-icon" onclick="loadSavedFilter('${f.id}'); closeModal();" title="Load">📋</button>
+                        <button class="btn-icon danger" onclick="deleteSavedFilter('${f.id}'); showManageFiltersModal();" title="Delete">🗑️</button>
+                    </div>
+                </li>
+            `).join('')}
+        </ul>`;
+
+    openModal('manageFiltersModal');
+}
+
+// ============================================
 // Initialize Application
 // ============================================
 
@@ -5231,7 +6548,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const isDarkMode = Settings.get('darkMode');
     applyDarkMode(isDarkMode);
 
+    // Initialize new features
+    KeyboardShortcuts.init();
+    ContextMenu.init();
+    initGlobalSearch();
+
     refreshDashboard();
     refreshConflictsPanel();
-    console.log('NetManager v5.0 initialized with VLAN, IP Ranges, Templates, Reservations, Conflict Detection, Audit Log, Dark Mode, Subnet Calculator, IP History, Hardware Lifecycle, and Maintenance Windows');
+    console.log('NetManager v6.0 initialized with Location/Rack Management, Global Search, Quick Actions, Keyboard Shortcuts, and Saved Filters');
 });

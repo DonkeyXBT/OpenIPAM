@@ -92,6 +92,37 @@ A comprehensive IP Address Management (IPAM) and Configuration Management Databa
 - **Subnet Calculator**: Built-in CIDR/subnet calculator tool
 - **Modern UI**: Clean interface with smooth animations
 
+### Location & Rack Management
+- **Datacenter Hierarchy**: Organize by datacenter, building, room, and rack
+- **Rack Visualization**: Visual rack diagram showing device positions
+- **Rack Units (U)**: Track U positions for physical servers
+- **Utilization Tracking**: See how full each rack is
+- **Contact Information**: Store site contact details per location
+
+### Global Search
+- **Universal Search**: Search across hosts, IPs, subnets, VLANs, companies, and locations
+- **Quick Access**: Press `/` to focus search from anywhere
+- **Instant Results**: Real-time search results as you type
+- **Navigate Results**: Click results to jump directly to items
+
+### Quick Actions (Context Menu)
+- **Right-Click Menus**: Context-aware actions on table rows
+- **Common Actions**: Edit, delete, copy values
+- **Entity-Specific**: Different actions for hosts, IPs, subnets, etc.
+- **Quick Copy**: Copy hostnames, IPs, network addresses to clipboard
+
+### Keyboard Shortcuts
+- **Navigation**: `g+d` Dashboard, `g+h` Hosts, `g+i` IPs, `g+s` Subnets, `g+v` VLANs
+- **Actions**: `/` Search, `n` New item, `r` Refresh, `t` Toggle dark mode
+- **Modal**: `Escape` Close modal, `?` Show shortcuts help
+- **Power User**: Navigate without touching the mouse
+
+### Saved Filters
+- **Save Filter State**: Save current search/filter combinations
+- **Quick Load**: Apply saved filters with one click
+- **Per-Page Filters**: Separate saved filters for each page
+- **Manage Filters**: Rename or delete saved filters
+
 ### CMDB (Configuration Management Database)
 - **Host Inventory**: Complete VM/server inventory with hardware specs
 - **Host Types**: VM, Physical Server, Container, Firewall, Router, Switch, Load Balancer, Storage, Backup Server, Database Server, Web Server, Application Server, Mail Server, Printer
@@ -180,6 +211,7 @@ Subnet Management  - Add/edit subnets, view IP lists
 Host Management    - CMDB for all VMs/servers
 IP Addresses       - IPAM view with DNS names and reservations
 IP Ranges          - View and manage IP range allocations
+Locations          - Datacenter, building, room, and rack management
 Subnet Templates   - Pre-defined configurations for quick setup
 Maintenance        - Schedule and track maintenance windows
 IP History         - Track IP assignment history over time
@@ -187,6 +219,24 @@ Lifecycle          - Hardware lifecycle and warranty tracking
 Activity Log       - Audit log of all system changes
 Import / Export    - CSV import/export, backup/restore
 ```
+
+### Keyboard Shortcuts
+
+Press `?` to view all keyboard shortcuts. Key shortcuts include:
+
+| Shortcut | Action |
+|----------|--------|
+| `/` | Focus global search |
+| `g + d` | Go to Dashboard |
+| `g + h` | Go to Hosts |
+| `g + i` | Go to IP Addresses |
+| `g + s` | Go to Subnets |
+| `g + v` | Go to VLANs |
+| `g + l` | Go to Locations |
+| `n` | New item (context-aware) |
+| `r` | Refresh current page |
+| `t` | Toggle dark mode |
+| `Escape` | Close modal |
 
 ### CSV Format
 
@@ -317,6 +367,8 @@ All data is stored in your browser's localStorage:
 - `ipdb_reservations` - IP reservations
 - `ipdb_ip_history` - IP assignment history
 - `ipdb_maintenance_windows` - Maintenance schedules
+- `ipdb_locations` - Location and rack data
+- `ipdb_saved_filters` - Saved filter configurations
 - `ipdb_audit_log` - System audit log
 - `ipdb_settings` - User preferences (dark mode, etc.)
 
@@ -383,6 +435,11 @@ Works in all modern browsers:
 - [x] **Dark Mode** - Toggle between light and dark themes
 - [x] **Subnet Calculator** - Built-in CIDR/subnet calculator tool
 - [x] **Activity Feed** - Real-time feed of recent changes
+- [x] **Location & Rack Management** - Datacenter, room, and rack tracking
+- [x] **Global Search** - Search across all entities
+- [x] **Quick Actions** - Right-click context menus
+- [x] **Keyboard Shortcuts** - Power user navigation
+- [x] **Saved Filters** - Save frequently used filter combinations
 
 ### Planned Features
 
@@ -401,10 +458,6 @@ Works in all modern browsers:
 - [ ] **Network Topology View** - Visual network diagram
 - [ ] **Network Scanning** - Discover active IPs (requires backend)
 
-#### UI/UX Enhancements
-- [ ] **Keyboard Shortcuts** - Power user navigation
-- [ ] **Saved Filters** - Save frequently used filter combinations
-
 #### Integration & Export
 - [ ] **Ansible Export** - Export inventory in Ansible format
 - [ ] **Terraform Export** - Export as Terraform configuration
@@ -421,7 +474,17 @@ Works in all modern browsers:
 
 ## Version History
 
-### v5.0 (Current)
+### v6.0 (Current)
+- Added Location & Rack Management with visual rack diagrams
+- Added Global Search across all entities (hosts, IPs, subnets, VLANs, etc.)
+- Added Quick Actions (right-click context menus) on table rows
+- Added Keyboard Shortcuts for power users (press `?` for help)
+- Added Saved Filters to save and load filter combinations
+- Enhanced UI with search results dropdown and context menus
+- Improved navigation with keyboard-driven workflow
+- Full dark mode support for all new features
+
+### v5.0
 - Added IP history tracking with assignment timeline
 - Added hardware lifecycle management (warranty, EOL, purchase date)
 - Added maintenance windows scheduling and tracking
