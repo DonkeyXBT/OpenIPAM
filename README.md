@@ -60,6 +60,38 @@ A comprehensive IP Address Management (IPAM) and Configuration Management Databa
 - **Display in Tables**: DNS names shown in the IP address management view
 - **Editable**: Update DNS names through the IP edit modal
 
+### IP History & Audit Log
+- **IP History Tracking**: Complete history of IP assignment changes over time
+- **Assignment Timeline**: View which hosts have used each IP address
+- **Audit Log**: Track all create, update, and delete operations
+- **Event Details**: Timestamps, user actions, old/new values recorded
+- **Recent Activity**: View recent IP changes and system events
+
+### Hardware Lifecycle Management
+- **Warranty Tracking**: Track warranty expiry dates for hardware
+- **Purchase Date**: Record when hardware was purchased
+- **EOL Status**: Track end-of-life dates for equipment
+- **Lifecycle Status**: Active, Under Warranty, Expiring, Out of Warranty, EOL, Decommissioned
+- **Alerts Dashboard**: Warnings for expiring warranties and approaching EOL
+- **Vendor & Model**: Track hardware vendor and model information
+- **Asset Tags**: Unique asset identifiers for inventory management
+- **Age Calculation**: Automatic calculation of hardware age
+
+### Maintenance Windows
+- **Schedule Maintenance**: Plan and schedule maintenance periods
+- **Maintenance Types**: Scheduled, Emergency, Patch, Firmware, Hardware, Network, Security, Backup
+- **Affected Resources**: Link maintenance to specific hosts and subnets
+- **Impact Levels**: None, Partial Outage, Full Outage
+- **Status Tracking**: Scheduled, In Progress, Completed, Cancelled, Failed
+- **Calendar View**: See upcoming and active maintenance windows
+- **Duration Tracking**: Automatic calculation of maintenance duration
+
+### Dark Mode & UI Enhancements
+- **Dark Theme**: Toggle between light and dark themes
+- **Theme Persistence**: Remembers your theme preference
+- **Subnet Calculator**: Built-in CIDR/subnet calculator tool
+- **Modern UI**: Clean interface with smooth animations
+
 ### CMDB (Configuration Management Database)
 - **Host Inventory**: Complete VM/server inventory with hardware specs
 - **Host Types**: VM, Physical Server, Container, Firewall, Router, Switch, Load Balancer, Storage, Backup Server, Database Server, Web Server, Application Server, Mail Server, Printer
@@ -149,6 +181,10 @@ Host Management    - CMDB for all VMs/servers
 IP Addresses       - IPAM view with DNS names and reservations
 IP Ranges          - View and manage IP range allocations
 Subnet Templates   - Pre-defined configurations for quick setup
+Maintenance        - Schedule and track maintenance windows
+IP History         - Track IP assignment history over time
+Lifecycle          - Hardware lifecycle and warranty tracking
+Activity Log       - Audit log of all system changes
 Import / Export    - CSV import/export, backup/restore
 ```
 
@@ -204,6 +240,64 @@ Example:
   - Subnet mismatches (IP outside subnet range)
   - Network/broadcast assignments
 
+#### Scheduling Maintenance Windows
+1. Go to "Maintenance"
+2. Click "Schedule Maintenance"
+3. Enter title and description
+4. Select maintenance type (Scheduled, Emergency, Patch, etc.)
+5. Set start and end times
+6. Select impact level (None, Partial, Full)
+7. Check affected hosts
+8. Click "Save"
+
+**Managing Maintenance:**
+- Click play button to start a scheduled maintenance
+- Click checkmark to complete an in-progress maintenance
+- Edit or delete maintenance windows as needed
+
+#### Viewing IP History
+1. Go to "IP History" to see all recent IP changes
+2. Click any IP address to view its detailed history
+3. View the assignment timeline showing which hosts used the IP
+4. See event log with assigned/released actions and timestamps
+
+**From IPAM Page:**
+- Click on any IP address to see its history modal
+- History is automatically recorded when IPs are assigned or released
+
+#### Hardware Lifecycle Management
+1. Go to "Lifecycle" to see the lifecycle dashboard
+2. View summary statistics (warranty status, EOL, average age)
+3. See hosts needing attention (expiring warranty, approaching EOL)
+4. Review tables of warranty expiring soon and EOL approaching
+
+**Adding Lifecycle Data to Hosts:**
+- When adding/editing a host, fill in lifecycle fields:
+  - Purchase Date
+  - Warranty Expiry
+  - EOL Date
+  - Vendor & Model
+  - Asset Tag
+  - Location
+
+#### Using Dark Mode
+- Click the moon icon in the sidebar footer to toggle dark mode
+- Your preference is saved and persists between sessions
+- All UI components support dark mode
+
+#### Using the Subnet Calculator
+1. Click the calculator icon in the sidebar footer
+2. Or go to "Subnet Calculator" in the Tools section
+3. Enter an IP address
+4. Select CIDR prefix (/8 to /32)
+5. Click "Calculate" to see:
+   - Network and broadcast addresses
+   - Subnet mask and wildcard mask
+   - First and last usable IPs
+   - Total and usable host count
+   - IP class and private/public status
+   - Binary mask representation
+
 ## Data Storage
 
 All data is stored in your browser's localStorage:
@@ -220,10 +314,15 @@ All data is stored in your browser's localStorage:
 - `ipdb_vlans` - VLAN definitions
 - `ipdb_ip_ranges` - IP range allocations
 - `ipdb_subnet_templates` - Custom templates
+- `ipdb_reservations` - IP reservations
+- `ipdb_ip_history` - IP assignment history
+- `ipdb_maintenance_windows` - Maintenance schedules
+- `ipdb_audit_log` - System audit log
+- `ipdb_settings` - User preferences (dark mode, etc.)
 
 ### Backup & Restore
 
-- **Backup**: Downloads JSON file with all data (v3 format)
+- **Backup**: Downloads JSON file with all data (v4 format)
 - **Restore**: Upload backup file to restore (replaces current data)
 - **CSV Export**: Export hosts to CSV spreadsheet
 
@@ -277,6 +376,13 @@ Works in all modern browsers:
 - [x] **Gateway & DNS Configuration** - Per-subnet network settings
 - [x] **Host Types** - 14 different host type categories
 - [x] **Column Customization** - Show/hide table columns
+- [x] **Audit Log** - Track all changes to IPs, hosts, and subnets
+- [x] **IP History** - Track IP assignment history over time
+- [x] **Hardware Lifecycle** - Track warranty, purchase date, EOL status
+- [x] **Maintenance Windows** - Schedule and track maintenance periods
+- [x] **Dark Mode** - Toggle between light and dark themes
+- [x] **Subnet Calculator** - Built-in CIDR/subnet calculator tool
+- [x] **Activity Feed** - Real-time feed of recent changes
 
 ### Planned Features
 
@@ -285,26 +391,19 @@ Works in all modern browsers:
 - [ ] **Asset Tags** - Add custom tags/labels to hosts for categorization
 - [ ] **Custom Fields** - Define custom attributes for hosts
 - [ ] **Host Dependencies** - Map relationships between hosts
-- [ ] **Hardware Lifecycle** - Track warranty, purchase date, EOL status
-- [ ] **Maintenance Windows** - Schedule and track maintenance periods
 
 #### Monitoring & Reporting
-- [ ] **Audit Log** - Track all changes to IPs, hosts, and subnets
-- [ ] **Historical Data** - Track IP assignment history over time
 - [ ] **Usage Reports** - Generate reports on IP utilization
 - [ ] **Utilization Alerts** - Notifications when capacity thresholds exceeded
 - [ ] **Dashboard Widgets** - Customizable dashboard layout
 
 #### Network Tools
-- [ ] **Subnet Calculator** - Built-in CIDR/subnet calculator tool
 - [ ] **Network Topology View** - Visual network diagram
 - [ ] **Network Scanning** - Discover active IPs (requires backend)
 
 #### UI/UX Enhancements
-- [ ] **Dark Mode** - Toggle between light and dark themes
 - [ ] **Keyboard Shortcuts** - Power user navigation
 - [ ] **Saved Filters** - Save frequently used filter combinations
-- [ ] **Activity Feed** - Real-time feed of recent changes
 
 #### Integration & Export
 - [ ] **Ansible Export** - Export inventory in Ansible format
@@ -322,7 +421,25 @@ Works in all modern browsers:
 
 ## Version History
 
-### v3.0 (Current)
+### v5.0 (Current)
+- Added IP history tracking with assignment timeline
+- Added hardware lifecycle management (warranty, EOL, purchase date)
+- Added maintenance windows scheduling and tracking
+- Added audit log with detailed change tracking
+- Added dark mode with theme persistence
+- Added subnet calculator tool
+- Enhanced backup/restore with all new data types
+- Host data model extended with lifecycle fields
+- New navigation items for Maintenance, IP History, Lifecycle, Activity Log
+
+### v4.0
+- Added dark mode toggle
+- Added audit logging system
+- Added subnet calculator
+- Added activity log page
+- Enhanced documentation
+
+### v3.0
 - Added VLAN management with types and company association
 - Added IP reservations with reservation types
 - Added IP range allocation for purpose-based organization
