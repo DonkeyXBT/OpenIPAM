@@ -27,6 +27,19 @@
                 </div>
             </div>
 
+            <!-- Global Search -->
+            <div class="global-search-container">
+                <div class="global-search-wrapper">
+                    <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="M21 21l-4.35-4.35"/>
+                    </svg>
+                    <input type="text" id="globalSearch" placeholder="Search... (Press /)" autocomplete="off">
+                    <kbd class="search-shortcut">/</kbd>
+                </div>
+                <div id="globalSearchResults" class="global-search-results"></div>
+            </div>
+
             <div class="nav-section">
                 <span class="nav-section-title">Overview</span>
                 <ul class="nav-menu">
@@ -87,6 +100,15 @@
                             <circle cx="10" cy="18" r="2"/>
                         </svg>
                         <span>IP Ranges</span>
+                    </li>
+                    <li class="nav-item" data-page="locations">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="7" width="20" height="14" rx="2"/>
+                            <path d="M16 7V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v3"/>
+                            <path d="M12 11v4"/>
+                            <path d="M8 11h8"/>
+                        </svg>
+                        <span>Locations</span>
                     </li>
                 </ul>
             </div>
@@ -610,6 +632,45 @@
                             </thead>
                             <tbody>
                                 <tr><td colspan="9" class="empty-message">No IP addresses tracked</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Locations Page -->
+            <div id="locations" class="page">
+                <div class="page-header">
+                    <div class="page-title">
+                        <h2>Locations & Racks</h2>
+                        <p class="page-description">Manage datacenters, rooms, and rack positions</p>
+                    </div>
+                    <div class="page-actions">
+                        <button class="btn-primary" onclick="showAddLocationModal()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"/>
+                                <line x1="5" y1="12" x2="19" y2="12"/>
+                            </svg>
+                            Add Location
+                        </button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="table-responsive">
+                        <table class="table" id="locationsTable">
+                            <thead>
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Type</th>
+                                    <th>Datacenter</th>
+                                    <th>Building</th>
+                                    <th>Room</th>
+                                    <th>Utilization</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="locationsTableBody">
+                                <tr><td colspan="7" class="empty-message">No locations configured</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -1739,12 +1800,142 @@
         </div>
     </div>
 
+    <!-- Add Location Modal -->
+    <div id="addLocationModal" class="modal">
+        <div class="modal-header">
+            <h3 id="locationModalTitle">Add Location</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="locationForm" onsubmit="saveLocation(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Name *</label>
+                        <input type="text" id="locationName" required placeholder="e.g., Rack-A1">
+                    </div>
+                    <div class="form-group">
+                        <label>Type *</label>
+                        <select id="locationType" required>
+                            <option value="rack">Rack</option>
+                            <option value="room">Room</option>
+                            <option value="building">Building</option>
+                            <option value="datacenter">Datacenter</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Datacenter</label>
+                        <input type="text" id="locationDatacenter" list="datacenterList" placeholder="e.g., DC-East">
+                        <datalist id="datacenterList"></datalist>
+                    </div>
+                    <div class="form-group">
+                        <label>Building</label>
+                        <input type="text" id="locationBuilding" list="buildingList" placeholder="e.g., Building A">
+                        <datalist id="buildingList"></datalist>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Room</label>
+                        <input type="text" id="locationRoom" list="roomList" placeholder="e.g., Server Room 1">
+                        <datalist id="roomList"></datalist>
+                    </div>
+                    <div class="form-group">
+                        <label>Rack Units (U)</label>
+                        <input type="number" id="locationRackUnits" value="42" min="1" max="52">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="locationDescription" placeholder="Optional description..."></textarea>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Contact Name</label>
+                        <input type="text" id="locationContactName" placeholder="Site contact">
+                    </div>
+                    <div class="form-group">
+                        <label>Contact Email</label>
+                        <input type="email" id="locationContactEmail" placeholder="contact@example.com">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Contact Phone</label>
+                    <input type="tel" id="locationContactPhone" placeholder="+1 555-0100">
+                </div>
+                <input type="hidden" id="locationEditId">
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Save Location</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Rack Visualization Modal -->
+    <div id="rackVisualizationModal" class="modal modal-large">
+        <div class="modal-header">
+            <h3>Rack View</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <!-- Populated by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Keyboard Shortcuts Modal -->
+    <div id="keyboardShortcutsModal" class="modal">
+        <div class="modal-header">
+            <h3>Keyboard Shortcuts</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body shortcuts-list">
+            <!-- Populated by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Manage Filters Modal -->
+    <div id="manageFiltersModal" class="modal">
+        <div class="modal-header">
+            <h3>Manage Saved Filters</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <!-- Populated by JavaScript -->
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div id="toast" class="toast">
         <div class="toast-icon"></div>
         <span class="toast-message"></span>
     </div>
 
-    <script src="app.js"></script>
+    <script src="modules/db.js"></script>
+    <script src="modules/utils.js"></script>
+    <script src="modules/constants.js"></script>
+    <script src="modules/vlan-manager.js"></script>
+    <script src="modules/ip-range-manager.js"></script>
+    <script src="modules/subnet-template-manager.js"></script>
+    <script src="modules/conflict-detector.js"></script>
+    <script src="modules/audit-log.js"></script>
+    <script src="modules/settings.js"></script>
+    <script src="modules/subnet-calculator.js"></script>
+    <script src="modules/ip-history.js"></script>
+    <script src="modules/maintenance-manager.js"></script>
+    <script src="modules/location-manager.js"></script>
+    <script src="modules/global-search.js"></script>
+    <script src="modules/saved-filters.js"></script>
+    <script src="modules/keyboard-shortcuts.js"></script>
+    <script src="modules/context-menu.js"></script>
+    <script src="modules/hardware-lifecycle.js"></script>
+    <script src="modules/company-manager.js"></script>
+    <script src="modules/subnet-manager.js"></script>
+    <script src="modules/ip-manager.js"></script>
+    <script src="modules/host-manager.js"></script>
+    <script src="modules/csv-manager.js"></script>
+    <script src="modules/ui.js"></script>
+    <script src="modules/init.js"></script>
 </body>
 </html>
