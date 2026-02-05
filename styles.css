@@ -2432,38 +2432,33 @@ body {
 
 /* Conflict Detection */
 .conflicts-panel {
-    margin-bottom: 20px;
+    margin-bottom: 16px;
 }
 
-.no-conflicts {
-    text-align: center;
-    padding: 32px;
+.no-conflicts-compact {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
     background: var(--success-50);
     border: 1px solid var(--success-200);
-    border-radius: var(--border-radius-lg);
+    border-radius: var(--border-radius);
 }
 
-.no-conflicts .success-icon {
-    width: 48px;
-    height: 48px;
-    background: var(--success-500);
-    color: white;
-    border-radius: 50%;
+.no-conflicts-compact .success-badge {
     display: inline-flex;
     align-items: center;
-    justify-content: center;
-    font-size: 24px;
-    font-weight: bold;
-    margin-bottom: 12px;
+    gap: 6px;
+    padding: 4px 10px;
+    background: var(--success-500);
+    color: white;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
 }
 
-.no-conflicts h4 {
-    margin: 0 0 8px;
-    color: var(--success-700);
-}
-
-.no-conflicts p {
-    margin: 0;
+.no-conflicts-compact .success-text {
+    font-size: 0.85rem;
     color: var(--success-600);
 }
 
@@ -3421,4 +3416,54 @@ body {
 
 [data-theme="dark"] .stat-mini .stat-value {
     color: var(--primary-500);
+}
+
+/* ============================================
+   Compact Table View
+   ============================================ */
+
+.compact-table th,
+.compact-table td {
+    padding: 6px 10px !important;
+    font-size: 0.8rem !important;
+}
+
+.compact-table .status-badge,
+.compact-table .company-badge {
+    padding: 2px 8px;
+    font-size: 0.7rem;
+}
+
+.compact-table .action-buttons {
+    gap: 2px;
+}
+
+.compact-table .btn-icon {
+    padding: 4px;
+}
+
+.compact-table .btn-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.btn-icon-text.active {
+    background: var(--primary-100);
+    border-color: var(--primary-300);
+    color: var(--primary-700);
+}
+
+[data-theme="dark"] .btn-icon-text.active {
+    background: var(--primary-200);
+    border-color: var(--primary-400);
+    color: var(--primary-300);
+}
+
+[data-theme="dark"] .no-conflicts-compact {
+    background: var(--success-100);
+    border-color: var(--success-200);
+}
+
+[data-theme="dark"] .no-conflicts-compact .success-text {
+    color: var(--success-500);
 }

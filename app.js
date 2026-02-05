@@ -3292,6 +3292,39 @@ function filterIPs() {
     });
 }
 
+let ipamCompactView = false;
+
+function toggleIPAMCompactView() {
+    ipamCompactView = !ipamCompactView;
+    const table = document.getElementById('ipsTable');
+    const btn = document.getElementById('ipamCompactViewBtn');
+
+    if (table) {
+        table.classList.toggle('compact-table', ipamCompactView);
+    }
+
+    if (btn) {
+        btn.classList.toggle('active', ipamCompactView);
+    }
+
+    // Save preference
+    Settings.set('ipamCompactView', ipamCompactView);
+}
+
+function initIPAMCompactView() {
+    ipamCompactView = Settings.get('ipamCompactView') || false;
+    const table = document.getElementById('ipsTable');
+    const btn = document.getElementById('ipamCompactViewBtn');
+
+    if (table && ipamCompactView) {
+        table.classList.add('compact-table');
+    }
+
+    if (btn && ipamCompactView) {
+        btn.classList.add('active');
+    }
+}
+
 function showAssignIPModal() {
     document.getElementById('assignIPForm').reset();
     populateHostSelect();
@@ -4405,10 +4438,9 @@ function refreshConflictsPanel() {
 
     if (conflicts.length === 0) {
         panel.innerHTML = `
-            <div class="no-conflicts">
-                <div class="success-icon">✓</div>
-                <h4>No Conflicts Detected</h4>
-                <p>All IP addresses are properly configured.</p>
+            <div class="no-conflicts-compact">
+                <span class="success-badge">✓ No Conflicts</span>
+                <span class="success-text">All IP addresses properly configured</span>
             </div>
         `;
         return;
@@ -4557,6 +4589,7 @@ navigateTo = function(page) {
         case 'ipam':
             refreshIPsTable();
             populateAllFilters();
+            initIPAMCompactView();
             break;
         case 'vlans':
             refreshVLANsTable();
