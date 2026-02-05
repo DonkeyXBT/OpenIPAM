@@ -16,7 +16,9 @@ const DB = {
         VLANS: 'ipdb_vlans',
         IP_RANGES: 'ipdb_ip_ranges',
         SUBNET_TEMPLATES: 'ipdb_subnet_templates',
-        RESERVATIONS: 'ipdb_reservations'
+        RESERVATIONS: 'ipdb_reservations',
+        AUDIT_LOG: 'ipdb_audit_log',
+        SETTINGS: 'ipdb_settings'
     },
 
     get(key) {
@@ -687,6 +689,252 @@ const RESERVATION_TYPES = [
     { id: 'future', name: 'Future Use', icon: '🔮', color: '#ec4899' },
     { id: 'other', name: 'Other', icon: '📌', color: '#6b7280' }
 ];
+
+// ============================================
+// Audit Log Management
+// ============================================
+
+const AuditLog = {
+    MAX_ENTRIES: 500,
+
+    log(action, entityType, entityId, details, oldValue = null, newValue = null) {
+        const logs = DB.get(DB.KEYS.AUDIT_LOG);
+
+        const entry = {
+            id: DB.generateId(),
+            timestamp: new Date().toISOString(),
+            action,
+            entityType,
+            entityId,
+            details,
+            oldValue,
+            newValue
+        };
+
+        logs.unshift(entry);
+
+        // Keep only last MAX_ENTRIES
+        if (logs.length > this.MAX_ENTRIES) {
+            logs.length = this.MAX_ENTRIES;
+        }
+
+        DB.set(DB.KEYS.AUDIT_LOG, logs);
+        return entry;
+    },
+
+    getAll(limit = 100) {
+        const logs = DB.get(DB.KEYS.AUDIT_LOG);
+        return logs.slice(0, limit);
+    },
+
+    getByEntityType(entityType, limit = 50) {
+        const logs = DB.get(DB.KEYS.AUDIT_LOG);
+        return logs.filter(l => l.entityType === entityType).slice(0, limit);
+    },
+
+    getByEntity(entityType, entityId) {
+        const logs = DB.get(DB.KEYS.AUDIT_LOG);
+        return logs.filter(l => l.entityType === entityType && l.entityId === entityId);
+    },
+
+    clear() {
+        DB.set(DB.KEYS.AUDIT_LOG, []);
+    }
+};
+
+// ============================================
+// Settings Management (Dark Mode, etc.)
+// ============================================
+
+const Settings = {
+    defaults: {
+        darkMode: false,
+        compactView: false,
+        showAuditLog: true
+    },
+
+    get(key) {
+        const settings = this.getAll();
+        return settings[key] !== undefined ? settings[key] : this.defaults[key];
+    },
+
+    set(key, value) {
+        const settings = this.getAll();
+        settings[key] = value;
+        localStorage.setItem(DB.KEYS.SETTINGS, JSON.stringify(settings));
+
+        // Log settings change
+        AuditLog.log('update', 'settings', key, `Changed ${key} to ${value}`);
+    },
+
+    getAll() {
+        const stored = localStorage.getItem(DB.KEYS.SETTINGS);
+        return stored ? JSON.parse(stored) : { ...this.defaults };
+    },
+
+    reset() {
+        localStorage.setItem(DB.KEYS.SETTINGS, JSON.stringify(this.defaults));
+    }
+};
+
+// ============================================
+// Subnet Calculator
+// ============================================
+
+const SubnetCalculator = {
+    calculate(ip, cidr) {
+        if (!IPUtils.isValidIP(ip)) {
+            return { error: 'Invalid IP address' };
+        }
+
+        cidr = parseInt(cidr);
+        if (isNaN(cidr) || cidr < 0 || cidr > 32) {
+            return { error: 'Invalid CIDR (must be 0-32)' };
+        }
+
+        const networkAddress = IPUtils.getNetworkAddress(ip, cidr);
+        const broadcastAddress = IPUtils.getBroadcastAddress(networkAddress, cidr);
+        const totalHosts = IPUtils.getTotalHosts(cidr);
+
+        const networkInt = IPUtils.ipToInt(networkAddress);
+        const firstUsable = cidr < 31 ? IPUtils.intToIp(networkInt + 1) : networkAddress;
+        const lastUsable = cidr < 31 ? IPUtils.intToIp(networkInt + totalHosts) : broadcastAddress;
+
+        // Calculate subnet mask
+        const maskInt = (-1 << (32 - cidr)) >>> 0;
+        const subnetMask = IPUtils.intToIp(maskInt);
+
+        // Wildcard mask (inverse)
+        const wildcardInt = ~maskInt >>> 0;
+        const wildcardMask = IPUtils.intToIp(wildcardInt);
+
+        // IP class
+        const firstOctet = parseInt(ip.split('.')[0]);
+        let ipClass = 'E';
+        if (firstOctet >= 1 && firstOctet <= 126) ipClass = 'A';
+        else if (firstOctet >= 128 && firstOctet <= 191) ipClass = 'B';
+        else if (firstOctet >= 192 && firstOctet <= 223) ipClass = 'C';
+        else if (firstOctet >= 224 && firstOctet <= 239) ipClass = 'D (Multicast)';
+
+        // Private/Public
+        const isPrivate = this.isPrivateIP(ip);
+
+        return {
+            inputIP: ip,
+            cidr,
+            networkAddress,
+            broadcastAddress,
+            subnetMask,
+            wildcardMask,
+            firstUsableIP: firstUsable,
+            lastUsableIP: lastUsable,
+            totalHosts,
+            usableHosts: cidr < 31 ? totalHosts : (cidr === 31 ? 2 : 1),
+            ipClass,
+            isPrivate,
+            binaryMask: this.toBinary(maskInt),
+            notation: `${networkAddress}/${cidr}`
+        };
+    },
+
+    isPrivateIP(ip) {
+        const parts = ip.split('.').map(Number);
+        // 10.0.0.0/8
+        if (parts[0] === 10) return true;
+        // 172.16.0.0/12
+        if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+        // 192.168.0.0/16
+        if (parts[0] === 192 && parts[1] === 168) return true;
+        return false;
+    },
+
+    toBinary(num) {
+        return (num >>> 0).toString(2).padStart(32, '0').match(/.{8}/g).join('.');
+    },
+
+    // Calculate supernet (combine multiple subnets)
+    calculateSupernet(subnets) {
+        if (!subnets || subnets.length < 2) {
+            return { error: 'Need at least 2 subnets' };
+        }
+
+        // Find the smallest CIDR that encompasses all
+        let minIP = Infinity;
+        let maxIP = 0;
+
+        subnets.forEach(s => {
+            const networkInt = IPUtils.ipToInt(s.network);
+            const broadcastInt = IPUtils.ipToInt(IPUtils.getBroadcastAddress(s.network, s.cidr));
+            minIP = Math.min(minIP, networkInt);
+            maxIP = Math.max(maxIP, broadcastInt);
+        });
+
+        // Calculate required CIDR
+        const range = maxIP - minIP + 1;
+        const bitsNeeded = Math.ceil(Math.log2(range));
+        const newCidr = 32 - bitsNeeded;
+
+        const newNetwork = IPUtils.getNetworkAddress(IPUtils.intToIp(minIP), newCidr);
+
+        return {
+            network: newNetwork,
+            cidr: newCidr,
+            notation: `${newNetwork}/${newCidr}`,
+            totalHosts: IPUtils.getTotalHosts(newCidr)
+        };
+    },
+
+    // Split subnet into smaller subnets
+    splitSubnet(network, cidr, newCidr) {
+        if (newCidr <= cidr) {
+            return { error: 'New CIDR must be larger than current' };
+        }
+
+        const numSubnets = Math.pow(2, newCidr - cidr);
+        const subnets = [];
+        const baseInt = IPUtils.ipToInt(network);
+        const subnetSize = Math.pow(2, 32 - newCidr);
+
+        for (let i = 0; i < numSubnets; i++) {
+            const subnetNetwork = IPUtils.intToIp(baseInt + (i * subnetSize));
+            subnets.push({
+                network: subnetNetwork,
+                cidr: newCidr,
+                notation: `${subnetNetwork}/${newCidr}`,
+                totalHosts: IPUtils.getTotalHosts(newCidr)
+            });
+        }
+
+        return { subnets };
+    }
+};
+
+// ============================================
+// MAC Address Utilities
+// ============================================
+
+const MACUtils = {
+    isValidMAC(mac) {
+        if (!mac) return false;
+        // Accept formats: AA:BB:CC:DD:EE:FF, AA-BB-CC-DD-EE-FF, AABBCCDDEEFF
+        const cleaned = mac.replace(/[:-]/g, '').toUpperCase();
+        return /^[0-9A-F]{12}$/.test(cleaned);
+    },
+
+    formatMAC(mac, separator = ':') {
+        if (!mac) return '';
+        const cleaned = mac.replace(/[:-]/g, '').toUpperCase();
+        if (cleaned.length !== 12) return mac;
+        return cleaned.match(/.{2}/g).join(separator);
+    },
+
+    getVendor(mac) {
+        // This would typically call an API or use a local OUI database
+        // For now, just return the OUI prefix
+        const cleaned = mac.replace(/[:-]/g, '').toUpperCase();
+        return cleaned.substring(0, 6);
+    }
+};
 
 // ============================================
 // Company Management
@@ -3743,6 +3991,9 @@ navigateTo = function(page) {
         case 'import':
             populateImportCompanySelect();
             break;
+        case 'audit-log':
+            refreshAuditLog();
+            break;
     }
 };
 
@@ -3785,6 +4036,153 @@ function populateVLANSelect(selectId) {
 }
 
 // ============================================
+// Dark Mode Toggle
+// ============================================
+
+function toggleDarkMode() {
+    const isDark = Settings.get('darkMode');
+    Settings.set('darkMode', !isDark);
+    applyDarkMode(!isDark);
+}
+
+function applyDarkMode(isDark) {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    const btn = document.getElementById('darkModeBtn');
+    if (btn) {
+        btn.innerHTML = isDark ?
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>' :
+            '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>';
+    }
+}
+
+// ============================================
+// Audit Log UI
+// ============================================
+
+function refreshAuditLog() {
+    const logs = AuditLog.getAll(50);
+    const container = document.getElementById('auditLogContent');
+
+    if (!container) return;
+
+    if (logs.length === 0) {
+        container.innerHTML = '<p class="empty-state">No activity recorded yet</p>';
+        return;
+    }
+
+    container.innerHTML = logs.map(log => {
+        const date = new Date(log.timestamp);
+        const timeStr = date.toLocaleString();
+
+        const actionIcons = {
+            'create': '➕',
+            'update': '✏️',
+            'delete': '🗑️',
+            'assign': '🔗',
+            'release': '🔓',
+            'reserve': '🔒'
+        };
+
+        const icon = actionIcons[log.action] || '📝';
+
+        return `
+            <div class="audit-log-item">
+                <span class="audit-icon">${icon}</span>
+                <div class="audit-details">
+                    <span class="audit-action">${log.action.toUpperCase()}</span>
+                    <span class="audit-entity">${log.entityType}</span>
+                    <p class="audit-description">${escapeHtml(log.details)}</p>
+                    <span class="audit-time">${timeStr}</span>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function clearAuditLog() {
+    if (!confirm('Clear all audit log entries?')) return;
+    AuditLog.clear();
+    refreshAuditLog();
+    showToast('Audit log cleared', 'success');
+}
+
+// ============================================
+// Subnet Calculator UI
+// ============================================
+
+function showSubnetCalculator() {
+    document.getElementById('subnetCalcForm').reset();
+    document.getElementById('subnetCalcResults').innerHTML = '';
+    openModal('subnetCalculatorModal');
+}
+
+function calculateSubnet() {
+    const ip = document.getElementById('calcIP').value;
+    const cidr = document.getElementById('calcCIDR').value;
+
+    const result = SubnetCalculator.calculate(ip, cidr);
+    const container = document.getElementById('subnetCalcResults');
+
+    if (result.error) {
+        container.innerHTML = `<div class="calc-error">${result.error}</div>`;
+        return;
+    }
+
+    container.innerHTML = `
+        <div class="calc-results-grid">
+            <div class="calc-result-item">
+                <label>Network Address</label>
+                <span class="calc-value monospace">${result.networkAddress}</span>
+            </div>
+            <div class="calc-result-item">
+                <label>Broadcast Address</label>
+                <span class="calc-value monospace">${result.broadcastAddress}</span>
+            </div>
+            <div class="calc-result-item">
+                <label>Subnet Mask</label>
+                <span class="calc-value monospace">${result.subnetMask}</span>
+            </div>
+            <div class="calc-result-item">
+                <label>Wildcard Mask</label>
+                <span class="calc-value monospace">${result.wildcardMask}</span>
+            </div>
+            <div class="calc-result-item">
+                <label>First Usable IP</label>
+                <span class="calc-value monospace">${result.firstUsableIP}</span>
+            </div>
+            <div class="calc-result-item">
+                <label>Last Usable IP</label>
+                <span class="calc-value monospace">${result.lastUsableIP}</span>
+            </div>
+            <div class="calc-result-item">
+                <label>Usable Hosts</label>
+                <span class="calc-value">${result.usableHosts.toLocaleString()}</span>
+            </div>
+            <div class="calc-result-item">
+                <label>Total Addresses</label>
+                <span class="calc-value">${Math.pow(2, 32 - result.cidr).toLocaleString()}</span>
+            </div>
+            <div class="calc-result-item">
+                <label>IP Class</label>
+                <span class="calc-value">${result.ipClass}</span>
+            </div>
+            <div class="calc-result-item">
+                <label>IP Type</label>
+                <span class="calc-value">${result.isPrivate ? 'Private' : 'Public'}</span>
+            </div>
+            <div class="calc-result-item full-width">
+                <label>CIDR Notation</label>
+                <span class="calc-value monospace">${result.notation}</span>
+            </div>
+            <div class="calc-result-item full-width">
+                <label>Binary Mask</label>
+                <span class="calc-value monospace small">${result.binaryMask}</span>
+            </div>
+        </div>
+    `;
+}
+
+// ============================================
 // Initialize Application
 // ============================================
 
@@ -3795,7 +4193,11 @@ document.addEventListener('DOMContentLoaded', () => {
         compactBtn.classList.add('active');
     }
 
+    // Apply dark mode if enabled
+    const isDarkMode = Settings.get('darkMode');
+    applyDarkMode(isDarkMode);
+
     refreshDashboard();
     refreshConflictsPanel();
-    console.log('NetManager v3.0 initialized with VLAN, IP Ranges, Templates, Reservations, and Conflict Detection');
+    console.log('NetManager v4.0 initialized with VLAN, IP Ranges, Templates, Reservations, Conflict Detection, Audit Log, Dark Mode, and Subnet Calculator');
 });
