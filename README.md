@@ -240,6 +240,64 @@ Example:
   - Subnet mismatches (IP outside subnet range)
   - Network/broadcast assignments
 
+#### Scheduling Maintenance Windows
+1. Go to "Maintenance"
+2. Click "Schedule Maintenance"
+3. Enter title and description
+4. Select maintenance type (Scheduled, Emergency, Patch, etc.)
+5. Set start and end times
+6. Select impact level (None, Partial, Full)
+7. Check affected hosts
+8. Click "Save"
+
+**Managing Maintenance:**
+- Click play button to start a scheduled maintenance
+- Click checkmark to complete an in-progress maintenance
+- Edit or delete maintenance windows as needed
+
+#### Viewing IP History
+1. Go to "IP History" to see all recent IP changes
+2. Click any IP address to view its detailed history
+3. View the assignment timeline showing which hosts used the IP
+4. See event log with assigned/released actions and timestamps
+
+**From IPAM Page:**
+- Click on any IP address to see its history modal
+- History is automatically recorded when IPs are assigned or released
+
+#### Hardware Lifecycle Management
+1. Go to "Lifecycle" to see the lifecycle dashboard
+2. View summary statistics (warranty status, EOL, average age)
+3. See hosts needing attention (expiring warranty, approaching EOL)
+4. Review tables of warranty expiring soon and EOL approaching
+
+**Adding Lifecycle Data to Hosts:**
+- When adding/editing a host, fill in lifecycle fields:
+  - Purchase Date
+  - Warranty Expiry
+  - EOL Date
+  - Vendor & Model
+  - Asset Tag
+  - Location
+
+#### Using Dark Mode
+- Click the moon icon in the sidebar footer to toggle dark mode
+- Your preference is saved and persists between sessions
+- All UI components support dark mode
+
+#### Using the Subnet Calculator
+1. Click the calculator icon in the sidebar footer
+2. Or go to "Subnet Calculator" in the Tools section
+3. Enter an IP address
+4. Select CIDR prefix (/8 to /32)
+5. Click "Calculate" to see:
+   - Network and broadcast addresses
+   - Subnet mask and wildcard mask
+   - First and last usable IPs
+   - Total and usable host count
+   - IP class and private/public status
+   - Binary mask representation
+
 ## Data Storage
 
 All data is stored in your browser's localStorage:
