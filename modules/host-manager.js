@@ -6,7 +6,7 @@ const HostManager = {
         return hosts.map(host => {
             const hostIPs = ips.filter(ip => ip.hostId === host.id);
             const company = companies.find(c => c.id === host.companyId);
-            const hostType = HOST_TYPES.find(t => t.id === host.hostType) || HOST_TYPES.find(t => t.id === 'virtual_machine');
+            const hostType = HOST_TYPES.find(t => t.id === host.hostType) || HOST_TYPES[0] || { id: 'vm', name: 'Virtual Machine', icon: '💻' };
             return {
                 ...host,
                 ipAddresses: hostIPs.map(ip => ip.ipAddress).join(', '),
@@ -47,7 +47,7 @@ const HostManager = {
             id: DB.generateId(),
             companyId: data.companyId || null,
             vmName: data.vmName,
-            hostType: data.hostType || 'virtual_machine',
+            hostType: data.hostType || 'vm',
             description: data.description || '',
             serialNumber: data.serialNumber || '',
             operatingSystem: data.operatingSystem || '',
