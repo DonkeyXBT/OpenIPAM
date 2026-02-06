@@ -5,7 +5,7 @@ const IPRangeManager = {
         const ips = DB.get(DB.KEYS.IPS);
         return ranges.map(range => {
             const subnet = subnets.find(s => s.id === range.subnetId);
-            const purpose = RANGE_PURPOSES.find(p => p.id === range.purpose) || RANGE_PURPOSES.find(p => p.id === 'other');
+            const purpose = RANGE_PURPOSES.find(p => p.id === range.purpose) || RANGE_PURPOSES.find(p => p.id === 'reserved');
             const startInt = IPUtils.ipToInt(range.startIP);
             const endInt = IPUtils.ipToInt(range.endIP);
             const totalIPs = endInt - startInt + 1;

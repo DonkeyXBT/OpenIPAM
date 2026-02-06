@@ -1667,7 +1667,7 @@ function viewTemplate(templateId) {
         <h5 style="margin: 20px 0 12px;">IP Ranges</h5>
         <div class="template-ranges">
             ${template.ranges?.map(range => {
-                const purpose = RANGE_PURPOSES.find(p => p.id === range.purpose) || RANGE_PURPOSES[10];
+                const purpose = RANGE_PURPOSES.find(p => p.id === range.purpose) || RANGE_PURPOSES[9];
                 return `
                 <div class="template-range-item" style="border-left: 4px solid ${purpose.color};">
                     <span class="range-purpose">${purpose.icon} ${range.name || purpose.name}</span>
