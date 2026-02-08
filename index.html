@@ -1778,6 +1778,25 @@
                     <label>Notes</label>
                     <textarea id="maintenanceNotes" placeholder="Additional notes..."></textarea>
                 </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="maintenanceRecurring" onchange="document.getElementById('maintenanceRecurringPattern').disabled = !this.checked">
+                            Recurring Maintenance
+                        </label>
+                    </div>
+                    <div class="form-group">
+                        <label>Repeat Pattern</label>
+                        <select id="maintenanceRecurringPattern" disabled>
+                            <option value="daily">Daily</option>
+                            <option value="weekly">Weekly</option>
+                            <option value="biweekly">Bi-Weekly</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="quarterly">Quarterly</option>
+                            <option value="yearly">Yearly</option>
+                        </select>
+                    </div>
+                </div>
                 <input type="hidden" id="maintenanceEditId">
                 <div class="form-actions">
                     <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
@@ -1912,6 +1931,7 @@
         <span class="toast-message"></span>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/sql.js@1.11.0/dist/sql-wasm.js"></script>
     <script src="modules/db.js"></script>
     <script src="modules/utils.js"></script>
     <script src="modules/constants.js"></script>

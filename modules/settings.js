@@ -11,14 +11,16 @@ const Settings = {
     set(key, value) {
         const settings = this.getAll();
         settings[key] = value;
-        localStorage.setItem(DB.KEYS.SETTINGS, JSON.stringify(settings));
+        DB.set(DB.KEYS.SETTINGS, settings);
         AuditLog.log('update', 'settings', key, `Changed ${key} to ${value}`);
     },
     getAll() {
-        const stored = localStorage.getItem(DB.KEYS.SETTINGS);
-        return stored ? JSON.parse(stored) : { ...this.defaults };
+        const stored = DB.get(DB.KEYS.SETTINGS);
+        return (stored && typeof stored === 'object' && !Array.isArray(stored))
+            ? stored
+            : { ...this.defaults };
     },
     reset() {
-        localStorage.setItem(DB.KEYS.SETTINGS, JSON.stringify(this.defaults));
+        DB.set(DB.KEYS.SETTINGS, this.defaults);
     }
 };

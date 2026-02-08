@@ -99,7 +99,7 @@ function sortData(data, field, direction) {
         let aVal = a[field];
         let bVal = b[field];
 
-        if (field === 'ipAddress' || field === 'network' || field === 'networkAddress') {
+        if (field === 'ipAddress' || field === 'network') {
             aVal = IPUtils.ipToInt(aVal || '0.0.0.0');
             bVal = IPUtils.ipToInt(bVal || '0.0.0.0');
         } else if (typeof aVal === 'string') {

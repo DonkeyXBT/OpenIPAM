@@ -10,7 +10,7 @@ const MaintenanceManager = {
             }) : [];
             const affectedSubnets = mw.subnetIds ? mw.subnetIds.map(id => {
                 const subnet = subnets.find(s => s.id === id);
-                return subnet ? `${subnet.networkAddress}/${subnet.cidr}` : 'Unknown';
+                return subnet ? `${subnet.network}/${subnet.cidr}` : 'Unknown';
             }) : [];
             const type = MAINTENANCE_TYPES.find(t => t.id === mw.type) || MAINTENANCE_TYPES[0];
             const status = MAINTENANCE_STATUS.find(s => s.id === mw.status) || MAINTENANCE_STATUS[0];

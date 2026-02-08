@@ -50,6 +50,7 @@ const CSVManager = {
                     if (updateExisting) {
                         HostManager.update(existingHost.id, {
                             companyId: companyId || existingHost.companyId,
+                            hostType: row['Host Type'] || existingHost.hostType,
                             operatingSystem: row['Operating System'] || existingHost.operatingSystem,
                             memoryUsedGB: row['Memory Used (GB)'] || existingHost.memoryUsedGB,
                             memoryAvailableGB: row['Memory Available (GB)'] || existingHost.memoryAvailableGB,
@@ -76,6 +77,7 @@ const CSVManager = {
                         id: DB.generateId(),
                         companyId: companyId || null,
                         vmName: vmName,
+                        hostType: row['Host Type'] || 'vm',
                         operatingSystem: row['Operating System'] || '',
                         memoryUsedGB: parseFloat(row['Memory Used (GB)']) || null,
                         memoryAvailableGB: parseFloat(row['Memory Available (GB)']) || null,
@@ -108,7 +110,7 @@ const CSVManager = {
         const hosts = HostManager.getAll();
         const headers = [
             'Operating System', 'Memory Used (GB)', 'Memory Available (GB)',
-            'VM Name', 'Node', 'Disk Size (GB)', 'State', 'CPU Count',
+            'VM Name', 'Host Type', 'Node', 'Disk Size (GB)', 'State', 'CPU Count',
             'Disk Used (GB)', 'Memory Total (GB)', 'IP Addresses', 'Fav'
         ];
         let csv = headers.map(h => `"${h}"`).join(',') + '\n';
@@ -118,6 +120,7 @@ const CSVManager = {
                 host.memoryUsedGB || '',
                 host.memoryAvailableGB || '',
                 host.vmName || '',
+                host.hostType || 'vm',
                 host.node || '',
                 host.diskSizeGB || '',
                 host.state || '',

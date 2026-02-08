@@ -88,29 +88,36 @@ python3 -m http.server 8000
 ## CSV Import Format
 
 ```csv
-"Operating System","Memory Used (GB)","Memory Available (GB)","VM Name","Node","Disk Size (GB)","State","CPU Count","Disk Used (GB)","Memory Total (GB)","IP Addresses","Fav"
-"Ubuntu 22.04 LTS","12.5","3.5","web-server-01","node-01","500","running","8","245","16","192.168.1.10","1"
+"Operating System","Memory Used (GB)","Memory Available (GB)","VM Name","Host Type","Node","Disk Size (GB)","State","CPU Count","Disk Used (GB)","Memory Total (GB)","IP Addresses","Fav"
+"Ubuntu 22.04 LTS","12.5","3.5","web-server-01","web","node-01","500","running","8","245","16","192.168.1.10","1"
 ```
+
+Host Type values: `vm`, `physical`, `container`, `firewall`, `router`, `switch`, `loadbalancer`, `storage`, `backup`, `database`, `web`, `app`, `mail`, `printer`
 
 ## Data Storage
 
-All data lives in browser localStorage. Nothing leaves your machine.
+Data is stored in a **SQLite database** (via sql.js WebAssembly) persisted to **IndexedDB**. Nothing leaves your machine.
 
-| Key | Contents |
-|-----|----------|
-| `ipdb_companies` | Company records |
-| `ipdb_subnets` | Subnet configurations |
-| `ipdb_hosts` | Host inventory |
-| `ipdb_ips` | IP address tracking |
-| `ipdb_vlans` | VLAN definitions |
-| `ipdb_ip_ranges` | IP range allocations |
-| `ipdb_subnet_templates` | Custom templates |
-| `ipdb_maintenance_windows` | Maintenance schedules |
-| `ipdb_locations` | Location and rack data |
-| `ipdb_ip_history` | IP assignment history |
-| `ipdb_audit_log` | System audit log |
-| `ipdb_saved_filters` | Saved filter configurations |
-| `ipdb_settings` | User preferences |
+- SQLite runs entirely in the browser via WebAssembly — no server required
+- IndexedDB provides storage limits of hundreds of MB (vs localStorage's 5MB)
+- Automatic migration from localStorage on first load
+- Falls back to localStorage gracefully if WebAssembly is unavailable
+
+| Table | Contents |
+|-------|----------|
+| `companies` | Company records |
+| `subnets` | Subnet configurations |
+| `hosts` | Host inventory |
+| `ips` | IP address tracking |
+| `vlans` | VLAN definitions |
+| `ip_ranges` | IP range allocations |
+| `subnet_templates` | Custom templates |
+| `maintenance_windows` | Maintenance schedules |
+| `locations` | Location and rack data |
+| `ip_history` | IP assignment history |
+| `audit_log` | System audit log |
+| `saved_filters` | Saved filter configurations |
+| `settings` | User preferences (key-value) |
 
 Use **Import / Export > Backup** to download a full JSON snapshot. Restore it on any browser to migrate data.
 
@@ -151,7 +158,8 @@ sample_inventory.csv                Example CSV for testing imports
 ## Tech Stack
 
 - Pure HTML5, CSS3, and vanilla JavaScript (ES6+)
-- Zero external dependencies or build tools
+- SQLite via [sql.js](https://github.com/sql-js/sql.js) (WebAssembly) for persistent storage
+- IndexedDB for database persistence (hundreds of MB capacity)
 - Single-page application with div-based routing
 - CSS custom properties for theming
 - Google Fonts (Inter) for typography

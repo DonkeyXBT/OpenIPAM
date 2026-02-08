@@ -1,9 +1,9 @@
-let compactView = localStorage.getItem('ipdb_compactView') === 'true';
+let compactView = false;
 let ipamCompactView = false;
 let currentSort = { field: 'vm_name', direction: 'asc' };
 let selectedHosts = new Set();
 let selectedIPs = new Set();
-let hostColumnSettings = JSON.parse(localStorage.getItem('ipdb_hostColumns') || 'null') || {
+let hostColumnSettings = {
     checkbox: true,
     vmName: true,
     hostType: true,
@@ -29,7 +29,14 @@ let visibleColumns = {
     type: true
 };
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    await DB.init();
+
+    // Load persisted UI settings from DB
+    const settings = DB.get(DB.KEYS.SETTINGS);
+    compactView = settings.compactView || false;
+    if (settings.hostColumns) hostColumnSettings = settings.hostColumns;
+
     const compactBtn = document.getElementById('compactViewBtn');
     if (compactBtn && compactView) {
         compactBtn.classList.add('active');
@@ -44,7 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     refreshDashboard();
     refreshConflictsPanel();
-    console.log('NetManager v6.0 initialized');
+    console.log('NetManager v7.0 initialized (SQLite)');
 });
 
 document.querySelectorAll('.nav-item').forEach(item => {

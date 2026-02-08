@@ -1,6 +1,8 @@
 function saveUISettings() {
-    localStorage.setItem('ipdb_compactView', compactView);
-    localStorage.setItem('ipdb_hostColumns', JSON.stringify(hostColumnSettings));
+    const settings = DB.get(DB.KEYS.SETTINGS);
+    settings.compactView = compactView;
+    settings.hostColumns = hostColumnSettings;
+    DB.set(DB.KEYS.SETTINGS, settings);
 }
 function showToast(message, type = 'info') {
     const toast = document.getElementById('toast');
@@ -1029,7 +1031,7 @@ function backupDatabase() {
         ipHistory: DB.get(DB.KEYS.IP_HISTORY),
         maintenanceWindows: DB.get(DB.KEYS.MAINTENANCE_WINDOWS),
         auditLog: DB.get(DB.KEYS.AUDIT_LOG),
-        settings: localStorage.getItem(DB.KEYS.SETTINGS) ? JSON.parse(localStorage.getItem(DB.KEYS.SETTINGS)) : {}
+        settings: DB.get(DB.KEYS.SETTINGS)
     };
     const json = JSON.stringify(backup, null, 2);
     downloadFile(json, `netmanager_backup_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
@@ -1058,7 +1060,7 @@ function restoreDatabase(event) {
             DB.set(DB.KEYS.MAINTENANCE_WINDOWS, backup.maintenanceWindows || []);
             DB.set(DB.KEYS.AUDIT_LOG, backup.auditLog || []);
             if (backup.settings) {
-                localStorage.setItem(DB.KEYS.SETTINGS, JSON.stringify(backup.settings));
+                DB.set(DB.KEYS.SETTINGS, backup.settings);
             }
             showToast('Database restored successfully', 'success');
             navigateTo('dashboard');
@@ -2161,10 +2163,12 @@ function showAddMaintenanceModal() {
     document.getElementById('maintenanceEditId').value = '';
     document.getElementById('maintenanceModalTitle').textContent = 'Schedule Maintenance';
     const now = new Date();
-    const start = new Date(now.getTime() + 24 * 60 * 60 * 1000); 
-    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000); 
+    const start = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
     document.getElementById('maintenanceStart').value = start.toISOString().slice(0, 16);
     document.getElementById('maintenanceEnd').value = end.toISOString().slice(0, 16);
+    document.getElementById('maintenanceRecurring').checked = false;
+    document.getElementById('maintenanceRecurringPattern').disabled = true;
     populateMaintenanceHostList();
     openModal('addMaintenanceModal');
 }
@@ -2180,6 +2184,11 @@ function showEditMaintenanceModal(id) {
     document.getElementById('maintenanceEnd').value = mw.endTime.slice(0, 16);
     document.getElementById('maintenanceImpact').value = mw.impact || 'partial';
     document.getElementById('maintenanceNotes').value = mw.notes || '';
+    document.getElementById('maintenanceRecurring').checked = mw.recurring || false;
+    document.getElementById('maintenanceRecurringPattern').disabled = !mw.recurring;
+    if (mw.recurringPattern) {
+        document.getElementById('maintenanceRecurringPattern').value = mw.recurringPattern;
+    }
     populateMaintenanceHostList(mw.hostIds);
     openModal('addMaintenanceModal');
 }
@@ -2200,6 +2209,7 @@ function saveMaintenance(event) {
     const editId = document.getElementById('maintenanceEditId').value;
     const selectedHosts = Array.from(document.querySelectorAll('input[name="maintenanceHosts"]:checked'))
         .map(cb => cb.value);
+    const isRecurring = document.getElementById('maintenanceRecurring').checked;
     const data = {
         title: document.getElementById('maintenanceTitle').value,
         description: document.getElementById('maintenanceDescription').value,
@@ -2208,7 +2218,9 @@ function saveMaintenance(event) {
         endTime: document.getElementById('maintenanceEnd').value,
         impact: document.getElementById('maintenanceImpact').value,
         notes: document.getElementById('maintenanceNotes').value,
-        hostIds: selectedHosts
+        hostIds: selectedHosts,
+        recurring: isRecurring,
+        recurringPattern: isRecurring ? document.getElementById('maintenanceRecurringPattern').value : null
     };
     let result;
     if (editId) {

@@ -37,7 +37,7 @@ const GlobalSearch = {
         });
         const subnets = DB.get(DB.KEYS.SUBNETS);
         subnets.forEach(subnet => {
-            const networkStr = `${subnet.networkAddress}/${subnet.cidr}`;
+            const networkStr = `${subnet.network}/${subnet.cidr}`;
             if (networkStr.includes(q) ||
                 subnet.name?.toLowerCase().includes(q) ||
                 subnet.description?.toLowerCase().includes(q)) {

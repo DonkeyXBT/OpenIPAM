@@ -144,7 +144,7 @@ const ContextMenu = {
             case 'copyNetwork':
                 const subnet = SubnetManager.getById(id);
                 if (subnet) {
-                    navigator.clipboard.writeText(`${subnet.networkAddress}/${subnet.cidr}`);
+                    navigator.clipboard.writeText(`${subnet.network}/${subnet.cidr}`);
                     showToast('Network copied', 'success');
                 }
                 break;
@@ -267,7 +267,7 @@ const ContextMenu = {
                 break;
             case 'subnet':
                 const subnet = SubnetManager.getById(id);
-                itemName = subnet ? `${subnet.networkAddress}/${subnet.cidr}` : 'this subnet';
+                itemName = subnet ? `${subnet.network}/${subnet.cidr}` : 'this subnet';
                 deleteFunc = () => SubnetManager.delete(id);
                 refreshFunc = refreshSubnetsTable;
                 break;
