@@ -238,7 +238,7 @@ const DB = {
             if (savedData) {
                 this._db = new SQL.Database(savedData);
                 this._createTables();
-                console.log('NetManager: SQLite loaded from IndexedDB');
+                console.log('OpenIPAM: SQLite loaded from IndexedDB');
             } else {
                 this._db = new SQL.Database();
                 this._createTables();
@@ -246,12 +246,12 @@ const DB = {
                 if (migrated) {
                     await this._persist();
                 }
-                console.log('NetManager: SQLite initialized' + (migrated ? ' (migrated from localStorage)' : ''));
+                console.log('OpenIPAM: SQLite initialized' + (migrated ? ' (migrated from localStorage)' : ''));
             }
         } catch (e) {
-            console.error('NetManager: SQLite init failed, using localStorage fallback', e);
+            console.error('OpenIPAM: SQLite init failed, using localStorage fallback', e);
             if (localStorage.getItem('ipdb_sqlite_migrated') === 'true') {
-                console.warn('NetManager: Data was previously migrated to SQLite. localStorage data may be outdated.');
+                console.warn('OpenIPAM: Data was previously migrated to SQLite. localStorage data may be outdated.');
             }
             this._db = null;
         }
@@ -589,7 +589,7 @@ const DB = {
 
         if (migrated) {
             localStorage.setItem('ipdb_sqlite_migrated', 'true');
-            console.log('NetManager: Data migrated from localStorage to SQLite');
+            console.log('OpenIPAM: Data migrated from localStorage to SQLite');
         }
 
         return migrated;

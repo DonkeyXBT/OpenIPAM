@@ -51,7 +51,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     refreshDashboard();
     refreshConflictsPanel();
-    console.log('NetManager v7.0 initialized (SQLite)');
+    console.log('OpenIPAM v7.0 initialized (SQLite)');
 });
 
 document.querySelectorAll('.nav-item').forEach(item => {
