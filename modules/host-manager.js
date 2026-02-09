@@ -26,7 +26,7 @@ const HostManager = {
         const hostIPs = ips.filter(ip => ip.hostId === id);
         const companies = DB.get(DB.KEYS.COMPANIES);
         const company = companies.find(c => c.id === host.companyId);
-        const hostType = HOST_TYPES.find(t => t.id === host.hostType) || HOST_TYPES.find(t => t.id === 'virtual_machine');
+        const hostType = HOST_TYPES.find(t => t.id === host.hostType) || HOST_TYPES[0] || { id: 'vm', name: 'Virtual Machine', icon: '💻' };
         return {
             ...host,
             ipAddresses: hostIPs.map(ip => ip.ipAddress).join(', '),
