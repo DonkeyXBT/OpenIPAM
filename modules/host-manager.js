@@ -86,6 +86,8 @@ const HostManager = {
                 if (result.success) assignedIPs.push(ip);
             });
         }
+        AuditLog.log('create', 'host', newHost.id,
+            `Created host: ${newHost.vmName}${assignedIPs.length ? ' with IPs: ' + assignedIPs.join(', ') : ''}`, null, newHost);
         return {
             success: true,
             message: `Host added${assignedIPs.length ? ' with IPs: ' + assignedIPs.join(', ') : ''}`,
@@ -99,6 +101,7 @@ const HostManager = {
         if (index === -1) {
             return { success: false, message: 'Host not found' };
         }
+        const oldHost = { ...hosts[index] };
         if (updates.memoryUsedGB !== undefined) updates.memoryUsedGB = parseFloat(updates.memoryUsedGB) || null;
         if (updates.memoryAvailableGB !== undefined) updates.memoryAvailableGB = parseFloat(updates.memoryAvailableGB) || null;
         if (updates.memoryTotalGB !== undefined) updates.memoryTotalGB = parseFloat(updates.memoryTotalGB) || null;
@@ -107,11 +110,14 @@ const HostManager = {
         if (updates.cpuCount !== undefined) updates.cpuCount = parseInt(updates.cpuCount) || null;
         hosts[index] = { ...hosts[index], ...updates, updatedAt: new Date().toISOString() };
         DB.set(DB.KEYS.HOSTS, hosts);
+        AuditLog.log('update', 'host', id,
+            `Updated host: ${hosts[index].vmName}`, oldHost, hosts[index]);
         return { success: true, message: 'Host updated successfully' };
     },
     delete(id) {
         const hosts = DB.get(DB.KEYS.HOSTS);
         const ips = DB.get(DB.KEYS.IPS);
+        const host = hosts.find(h => h.id === id);
         const updatedIPs = ips.map(ip => {
             if (ip.hostId === id) {
                 return { ...ip, hostId: null, status: 'available', updatedAt: new Date().toISOString() };
@@ -121,6 +127,8 @@ const HostManager = {
         const newHosts = hosts.filter(h => h.id !== id);
         DB.set(DB.KEYS.HOSTS, newHosts);
         DB.set(DB.KEYS.IPS, updatedIPs);
+        AuditLog.log('delete', 'host', id,
+            `Deleted host: ${host ? host.vmName : id}`, host, null);
         return { success: true, message: 'Host deleted successfully' };
     }
 };

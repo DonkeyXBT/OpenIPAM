@@ -42,6 +42,8 @@ const VLANManager = {
         };
         vlans.push(newVLAN);
         DB.set(DB.KEYS.VLANS, vlans);
+        AuditLog.log('create', 'vlan', newVLAN.id,
+            `Created VLAN ${newVLAN.vlanId}: ${newVLAN.name}`, null, newVLAN);
         return { success: true, message: 'VLAN added successfully', vlan: newVLAN };
     },
     update(id, updates) {
@@ -50,8 +52,11 @@ const VLANManager = {
         if (index === -1) {
             return { success: false, message: 'VLAN not found' };
         }
+        const oldVLAN = { ...vlans[index] };
         vlans[index] = { ...vlans[index], ...updates, updatedAt: new Date().toISOString() };
         DB.set(DB.KEYS.VLANS, vlans);
+        AuditLog.log('update', 'vlan', id,
+            `Updated VLAN ${vlans[index].vlanId}: ${vlans[index].name}`, oldVLAN, vlans[index]);
         return { success: true, message: 'VLAN updated successfully' };
     },
     delete(id) {
@@ -67,6 +72,8 @@ const VLANManager = {
         }
         const newVLANs = vlans.filter(v => v.id !== id);
         DB.set(DB.KEYS.VLANS, newVLANs);
+        AuditLog.log('delete', 'vlan', id,
+            `Deleted VLAN ${vlan.vlanId}: ${vlan.name}`, vlan, null);
         return { success: true, message: 'VLAN deleted successfully' };
     }
 };

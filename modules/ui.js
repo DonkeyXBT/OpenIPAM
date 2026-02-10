@@ -49,6 +49,9 @@ function navigateTo(page) {
         case 'import':
             populateImportCompanySelect();
             break;
+        case 'settings':
+            refreshSettingsPage();
+            break;
     }
     updateSavedFiltersDropdown(page);
 }
@@ -1943,6 +1946,9 @@ navigateTo = function(page) {
         case 'audit-log':
             refreshAuditLog();
             break;
+        case 'settings':
+            refreshSettingsPage();
+            break;
         case 'maintenance':
             refreshMaintenanceTable();
             break;
@@ -1994,8 +2000,125 @@ function applyDarkMode(isDark) {
             '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>';
     }
 }
+// --- Settings Page Functions ---
+function refreshSettingsPage() {
+    const isDark = Settings.get('darkMode');
+    const darkEl = document.getElementById('settingsDarkMode');
+    if (darkEl) darkEl.checked = !!isDark;
+
+    const compactEl = document.getElementById('settingsCompactView');
+    if (compactEl) compactEl.checked = !!compactView;
+
+    const dbName = Settings.get('dbStorageName') || 'NetManagerDB';
+    const dbNameEl = document.getElementById('settingsDBName');
+    if (dbNameEl) dbNameEl.value = dbName;
+
+    const currentNameEl = document.getElementById('settingsCurrentDBName');
+    if (currentNameEl) currentNameEl.textContent = DB._idbName || 'NetManagerDB';
+
+    const sizeEl = document.getElementById('settingsDBSize');
+    if (sizeEl) {
+        const size = DB.getStorageSize();
+        sizeEl.textContent = size > 1024 * 1024
+            ? (size / (1024 * 1024)).toFixed(2) + ' MB'
+            : (size / 1024).toFixed(1) + ' KB';
+    }
+
+    const maxLogsEl = document.getElementById('settingsMaxLogs');
+    if (maxLogsEl) maxLogsEl.value = Settings.get('maxLogEntries') || 500;
+
+    const logCountEl = document.getElementById('settingsLogCount');
+    if (logCountEl) logCountEl.textContent = AuditLog.getAll(9999).length;
+}
+function toggleSettingsDarkMode(checked) {
+    Settings.set('darkMode', checked);
+    applyDarkMode(checked);
+}
+function toggleSettingsCompactView(checked) {
+    compactView = checked;
+    saveUISettings();
+    const compactBtn = document.getElementById('compactViewBtn');
+    if (compactBtn) compactBtn.classList.toggle('active', checked);
+}
+function saveDBStorageName() {
+    const input = document.getElementById('settingsDBName');
+    const name = input.value.trim();
+    if (!name) {
+        showToast('Database name cannot be empty', 'error');
+        return;
+    }
+    if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
+        showToast('Database name can only contain letters, numbers, hyphens, and underscores', 'error');
+        return;
+    }
+    Settings.set('dbStorageName', name);
+    showToast('Database storage name saved. Reload the page to apply.', 'success');
+}
+function resetDBStorageName() {
+    Settings.set('dbStorageName', 'NetManagerDB');
+    const input = document.getElementById('settingsDBName');
+    if (input) input.value = 'NetManagerDB';
+    showToast('Database name reset to default. Reload the page to apply.', 'success');
+}
+function exportDatabase() {
+    if (!DB._db) {
+        showToast('No SQLite database available', 'error');
+        return;
+    }
+    try {
+        const data = DB._db.export();
+        const blob = new Blob([data], { type: 'application/x-sqlite3' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `openipam-backup-${new Date().toISOString().slice(0, 10)}.db`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast('Database exported successfully', 'success');
+    } catch (e) {
+        showToast('Failed to export database: ' + e.message, 'error');
+    }
+}
+function importDatabase(input) {
+    const file = input.files[0];
+    if (!file) return;
+    if (!confirm('This will replace ALL current data with the imported database. Are you sure?')) {
+        input.value = '';
+        return;
+    }
+    const reader = new FileReader();
+    reader.onload = async function(e) {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const SQL = await initSqlJs({
+                locateFile: f => `https://cdn.jsdelivr.net/npm/sql.js@1.11.0/dist/${f}`
+            });
+            const testDb = new SQL.Database(data);
+            testDb.exec('SELECT count(*) FROM hosts');
+            testDb.close();
+            DB._db.close();
+            DB._db = new SQL.Database(data);
+            DB._createTables();
+            await DB._persist();
+            showToast('Database imported successfully. Reloading...', 'success');
+            setTimeout(() => location.reload(), 1500);
+        } catch (e) {
+            showToast('Invalid database file: ' + e.message, 'error');
+        }
+        input.value = '';
+    };
+    reader.readAsArrayBuffer(file);
+}
+function saveMaxLogEntries(value) {
+    const num = parseInt(value) || 500;
+    Settings.set('maxLogEntries', Math.max(50, Math.min(5000, num)));
+    AuditLog.MAX_ENTRIES = num;
+    showToast('Max log entries updated', 'success');
+}
+
 function refreshAuditLog() {
-    const logs = AuditLog.getAll(50);
+    const maxDisplay = Settings.get('maxLogEntries') || 500;
+    const logs = AuditLog.getAll(Math.min(maxDisplay, 200));
     const container = document.getElementById('auditLogContent');
     if (!container) return;
     if (logs.length === 0) {

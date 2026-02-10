@@ -87,6 +87,8 @@ const IPManager = {
             previousHostId,
             previousHostName
         });
+        AuditLog.log('assign', 'ip', ipAddress,
+            `Assigned IP ${ipAddress} to host: ${host ? host.vmName : hostId}`);
         return { success: true, message: 'IP assigned successfully' };
     },
     release(ipAddress) {
@@ -111,6 +113,8 @@ const IPManager = {
             previousHostId,
             previousHostName
         });
+        AuditLog.log('release', 'ip', ipAddress,
+            `Released IP ${ipAddress} from host: ${previousHostName || previousHostId || 'unknown'}`);
         return { success: true, message: 'IP released successfully' };
     },
     register(ipAddress, hostId = null, status = 'assigned') {

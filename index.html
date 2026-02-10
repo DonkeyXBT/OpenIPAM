@@ -173,6 +173,13 @@
                         </svg>
                         <span>Import / Export</span>
                     </li>
+                    <li class="nav-item" data-page="settings">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+                        </svg>
+                        <span>Settings</span>
+                    </li>
                 </ul>
             </div>
             </div>
@@ -892,6 +899,124 @@
                     <div class="card-body">
                         <div id="auditLogContent" class="audit-log-list">
                             <p class="empty-state">No activity recorded yet</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Page -->
+            <div id="settings" class="page">
+                <div class="page-header">
+                    <div class="page-title">
+                        <h2>Settings</h2>
+                        <p class="page-description">Configure application preferences and database storage</p>
+                    </div>
+                </div>
+                <div class="settings-grid">
+                    <!-- Appearance -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Appearance</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="settings-item">
+                                <div class="settings-item-info">
+                                    <label>Dark Mode</label>
+                                    <p class="help-text">Toggle between light and dark theme</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="settingsDarkMode" onchange="toggleSettingsDarkMode(this.checked)">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                            <div class="settings-item">
+                                <div class="settings-item-info">
+                                    <label>Compact View</label>
+                                    <p class="help-text">Use condensed table rows for hosts</p>
+                                </div>
+                                <label class="toggle-switch">
+                                    <input type="checkbox" id="settingsCompactView" onchange="toggleSettingsCompactView(this.checked)">
+                                    <span class="toggle-slider"></span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Database Storage -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Database Storage</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="form-group">
+                                <label>IndexedDB Database Name</label>
+                                <div class="input-with-action">
+                                    <input type="text" id="settingsDBName" placeholder="NetManagerDB" value="">
+                                    <button class="btn-primary" onclick="saveDBStorageName()">Save</button>
+                                </div>
+                                <span class="help-text">The IndexedDB name used to persist SQLite data. Default: <strong>NetManagerDB</strong>. Changes take effect on next reload.</span>
+                            </div>
+                            <div class="settings-item" style="margin-top: 16px;">
+                                <div class="settings-item-info">
+                                    <label>Current Storage</label>
+                                    <p class="help-text">Database: <strong id="settingsCurrentDBName">NetManagerDB</strong> | Size: <strong id="settingsDBSize">0 KB</strong></p>
+                                </div>
+                            </div>
+                            <div class="settings-actions" style="margin-top: 16px; display: flex; gap: 8px; flex-wrap: wrap;">
+                                <button class="btn-secondary" onclick="exportDatabase()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:4px;">
+                                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                        <polyline points="7 10 12 15 17 10"/>
+                                        <line x1="12" y1="15" x2="12" y2="3"/>
+                                    </svg>
+                                    Export Database
+                                </button>
+                                <button class="btn-secondary" onclick="document.getElementById('importDBFile').click()">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px;margin-right:4px;">
+                                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                        <polyline points="17 8 12 3 7 8"/>
+                                        <line x1="12" y1="3" x2="12" y2="15"/>
+                                    </svg>
+                                    Import Database
+                                </button>
+                                <input type="file" id="importDBFile" accept=".db,.sqlite,.sqlite3" style="display:none" onchange="importDatabase(this)">
+                                <button class="btn-secondary" onclick="resetDBStorageName()">Reset to Default</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Activity Log Settings -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Activity Log</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="settings-item">
+                                <div class="settings-item-info">
+                                    <label>Max Log Entries</label>
+                                    <p class="help-text">Maximum number of audit log entries to keep (default: 500)</p>
+                                </div>
+                                <input type="number" id="settingsMaxLogs" min="50" max="5000" step="50" value="500" style="width: 100px; text-align: center;" onchange="saveMaxLogEntries(this.value)">
+                            </div>
+                            <div class="settings-item" style="margin-top: 12px;">
+                                <div class="settings-item-info">
+                                    <label>Current Entries</label>
+                                    <p class="help-text"><strong id="settingsLogCount">0</strong> entries stored</p>
+                                </div>
+                                <button class="btn-danger-outline btn-sm" onclick="clearAuditLog(); refreshSettingsPage();">Clear Log</button>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- About -->
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>About</h3>
+                        </div>
+                        <div class="card-body">
+                            <div class="settings-item">
+                                <div class="settings-item-info">
+                                    <label>OpenIPAM</label>
+                                    <p class="help-text">Version 7.0 | Browser-based IPAM & CMDB with SQLite</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

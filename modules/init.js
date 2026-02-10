@@ -45,6 +45,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     const isDarkMode = Settings.get('darkMode');
     applyDarkMode(isDarkMode);
 
+    // Load max audit log entries from settings
+    const maxLogs = Settings.get('maxLogEntries');
+    if (maxLogs) AuditLog.MAX_ENTRIES = parseInt(maxLogs) || 500;
+
     KeyboardShortcuts.init();
     ContextMenu.init();
     initGlobalSearch();

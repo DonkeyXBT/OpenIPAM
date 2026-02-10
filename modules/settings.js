@@ -12,6 +12,10 @@ const Settings = {
         const settings = this.getAll();
         settings[key] = value;
         DB.set(DB.KEYS.SETTINGS, settings);
+        // Persist DB storage name to localStorage so it's available before SQLite init
+        if (key === 'dbStorageName') {
+            localStorage.setItem('ipdb_dbStorageName', value);
+        }
         AuditLog.log('update', 'settings', key, `Changed ${key} to ${value}`);
     },
     getAll() {

@@ -21,6 +21,8 @@ const SubnetTemplateManager = {
         };
         templates.push(newTemplate);
         DB.set(DB.KEYS.SUBNET_TEMPLATES, templates);
+        AuditLog.log('create', 'subnet_template', newTemplate.id,
+            `Created subnet template: ${newTemplate.name}`, null, newTemplate);
         return { success: true, message: 'Template added successfully', template: newTemplate };
     },
     delete(id) {
@@ -31,6 +33,8 @@ const SubnetTemplateManager = {
         }
         const newTemplates = templates.filter(t => t.id !== id);
         DB.set(DB.KEYS.SUBNET_TEMPLATES, newTemplates);
+        AuditLog.log('delete', 'subnet_template', id,
+            `Deleted subnet template: ${template.name}`, template, null);
         return { success: true, message: 'Template deleted successfully' };
     },
     applyTemplate(templateId, subnetId) {

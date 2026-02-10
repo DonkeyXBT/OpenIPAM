@@ -43,6 +43,8 @@ const CompanyManager = {
         };
         companies.push(newCompany);
         DB.set(DB.KEYS.COMPANIES, companies);
+        AuditLog.log('create', 'company', newCompany.id,
+            `Created company: ${newCompany.name}`, null, newCompany);
         return { success: true, message: 'Company added successfully', company: newCompany };
     },
     update(id, updates) {
@@ -51,8 +53,11 @@ const CompanyManager = {
         if (index === -1) {
             return { success: false, message: 'Company not found' };
         }
+        const oldCompany = { ...companies[index] };
         companies[index] = { ...companies[index], ...updates, updatedAt: new Date().toISOString() };
         DB.set(DB.KEYS.COMPANIES, companies);
+        AuditLog.log('update', 'company', id,
+            `Updated company: ${companies[index].name}`, oldCompany, companies[index]);
         return { success: true, message: 'Company updated successfully' };
     },
     delete(id) {
@@ -64,8 +69,11 @@ const CompanyManager = {
         if (hasSubnets || hasHosts) {
             return { success: false, message: 'Cannot delete company with associated subnets or hosts' };
         }
+        const company = companies.find(c => c.id === id);
         const newCompanies = companies.filter(c => c.id !== id);
         DB.set(DB.KEYS.COMPANIES, newCompanies);
+        AuditLog.log('delete', 'company', id,
+            `Deleted company: ${company.name}`, company, null);
         return { success: true, message: 'Company deleted successfully' };
     }
 };

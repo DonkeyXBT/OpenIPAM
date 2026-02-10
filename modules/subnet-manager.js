@@ -68,6 +68,8 @@ const SubnetManager = {
         const msg = linkedCount > 0
             ? `Subnet added successfully (${linkedCount} existing IP${linkedCount > 1 ? 's' : ''} linked)`
             : 'Subnet added successfully';
+        AuditLog.log('create', 'subnet', newSubnet.id,
+            `Created subnet: ${networkAddress}/${newSubnet.cidr}${newSubnet.name ? ' (' + newSubnet.name + ')' : ''}`, null, newSubnet);
         return { success: true, message: msg, subnet: newSubnet };
     },
     update(id, updates) {
@@ -76,6 +78,7 @@ const SubnetManager = {
         if (index === -1) {
             return { success: false, message: 'Subnet not found' };
         }
+        const oldSubnet = { ...subnets[index] };
         subnets[index] = { ...subnets[index], ...updates, updatedAt: new Date().toISOString() };
         DB.set(DB.KEYS.SUBNETS, subnets);
         // Re-link orphaned IPs that now fall within the updated subnet
@@ -95,6 +98,8 @@ const SubnetManager = {
         if (changed) {
             DB.set(DB.KEYS.IPS, ips);
         }
+        AuditLog.log('update', 'subnet', id,
+            `Updated subnet: ${updatedSubnet.network}/${updatedSubnet.cidr}`, oldSubnet, updatedSubnet);
         return { success: true, message: 'Subnet updated successfully' };
     },
     delete(id) {
@@ -104,10 +109,13 @@ const SubnetManager = {
         if (assignedIPs.length > 0) {
             return { success: false, message: 'Cannot delete subnet with assigned IP addresses' };
         }
+        const subnet = subnets.find(s => s.id === id);
         const newSubnets = subnets.filter(s => s.id !== id);
         const newIPs = ips.filter(ip => ip.subnetId !== id);
         DB.set(DB.KEYS.SUBNETS, newSubnets);
         DB.set(DB.KEYS.IPS, newIPs);
+        AuditLog.log('delete', 'subnet', id,
+            `Deleted subnet: ${subnet.network}/${subnet.cidr}${subnet.name ? ' (' + subnet.name + ')' : ''}`, subnet, null);
         return { success: true, message: 'Subnet deleted successfully' };
     }
 };

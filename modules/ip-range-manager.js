@@ -66,6 +66,8 @@ const IPRangeManager = {
         };
         ranges.push(newRange);
         DB.set(DB.KEYS.IP_RANGES, ranges);
+        AuditLog.log('create', 'ip_range', newRange.id,
+            `Created IP range: ${newRange.startIP} - ${newRange.endIP}${newRange.name ? ' (' + newRange.name + ')' : ''}`, null, newRange);
         return { success: true, message: 'IP range added successfully', range: newRange };
     },
     update(id, updates) {
@@ -74,14 +76,20 @@ const IPRangeManager = {
         if (index === -1) {
             return { success: false, message: 'IP range not found' };
         }
+        const oldRange = { ...ranges[index] };
         ranges[index] = { ...ranges[index], ...updates, updatedAt: new Date().toISOString() };
         DB.set(DB.KEYS.IP_RANGES, ranges);
+        AuditLog.log('update', 'ip_range', id,
+            `Updated IP range: ${ranges[index].startIP} - ${ranges[index].endIP}`, oldRange, ranges[index]);
         return { success: true, message: 'IP range updated successfully' };
     },
     delete(id) {
         const ranges = DB.get(DB.KEYS.IP_RANGES);
+        const range = ranges.find(r => r.id === id);
         const newRanges = ranges.filter(r => r.id !== id);
         DB.set(DB.KEYS.IP_RANGES, newRanges);
+        AuditLog.log('delete', 'ip_range', id,
+            `Deleted IP range: ${range ? range.startIP + ' - ' + range.endIP : id}`, range, null);
         return { success: true, message: 'IP range deleted successfully' };
     }
 };

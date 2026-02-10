@@ -19,6 +19,7 @@ const DB = {
     _db: null,
     _saveTimer: null,
     _migrating: false,
+    _idbName: 'NetManagerDB',
 
     _tableMap: {
         'ipdb_companies': 'companies',
@@ -230,6 +231,18 @@ const DB = {
 
     async init() {
         try {
+            // Load custom DB name from localStorage (settings aren't available yet)
+            try {
+                const raw = localStorage.getItem('ipdb_settings');
+                if (raw) {
+                    const parsed = JSON.parse(raw);
+                    if (parsed.dbStorageName) this._idbName = parsed.dbStorageName;
+                }
+            } catch(e) {}
+            // Also check if already migrated to SQLite - read from IDB settings
+            const storedName = localStorage.getItem('ipdb_dbStorageName');
+            if (storedName) this._idbName = storedName;
+
             const SQL = await initSqlJs({
                 locateFile: file => `https://cdn.jsdelivr.net/npm/sql.js@1.11.0/dist/${file}`
             });
@@ -493,7 +506,7 @@ const DB = {
     _loadFromIDB() {
         return new Promise((resolve) => {
             try {
-                const request = indexedDB.open('NetManagerDB', 1);
+                const request = indexedDB.open(this._idbName, 1);
                 request.onupgradeneeded = (e) => {
                     const db = e.target.result;
                     if (!db.objectStoreNames.contains('sqliteDb')) {
@@ -524,7 +537,7 @@ const DB = {
     _saveToIDB(data) {
         return new Promise((resolve, reject) => {
             try {
-                const request = indexedDB.open('NetManagerDB', 1);
+                const request = indexedDB.open(this._idbName, 1);
                 request.onupgradeneeded = (e) => {
                     const db = e.target.result;
                     if (!db.objectStoreNames.contains('sqliteDb')) {
