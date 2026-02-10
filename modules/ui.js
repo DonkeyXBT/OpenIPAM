@@ -2060,6 +2060,103 @@ function resetDBStorageName() {
     if (input) input.value = 'NetManagerDB';
     showToast('Database name reset to default. Reload the page to apply.', 'success');
 }
+function openDBStorageLocation() {
+    const dbName = DB._idbName || 'NetManagerDB';
+    let browserName = 'your browser';
+    let storagePath = '';
+    const ua = navigator.userAgent;
+    const platform = navigator.platform || '';
+    const isWindows = platform.indexOf('Win') !== -1 || ua.indexOf('Windows') !== -1;
+    const isMac = platform.indexOf('Mac') !== -1;
+    const isLinux = platform.indexOf('Linux') !== -1 && ua.indexOf('Android') === -1;
+    // Detect browser and build the typical storage path
+    if (ua.indexOf('Edg/') !== -1) {
+        browserName = 'Microsoft Edge';
+        if (isWindows) storagePath = '%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default\\IndexedDB';
+        else if (isMac) storagePath = '~/Library/Application Support/Microsoft Edge/Default/IndexedDB';
+        else if (isLinux) storagePath = '~/.config/microsoft-edge/Default/IndexedDB';
+    } else if (ua.indexOf('Chrome') !== -1 && ua.indexOf('Edg') === -1) {
+        browserName = 'Google Chrome';
+        if (isWindows) storagePath = '%LOCALAPPDATA%\\Google\\Chrome\\User Data\\Default\\IndexedDB';
+        else if (isMac) storagePath = '~/Library/Application Support/Google/Chrome/Default/IndexedDB';
+        else if (isLinux) storagePath = '~/.config/google-chrome/Default/IndexedDB';
+    } else if (ua.indexOf('Firefox') !== -1) {
+        browserName = 'Firefox';
+        if (isWindows) storagePath = '%APPDATA%\\Mozilla\\Firefox\\Profiles\\<profile>\\storage\\default';
+        else if (isMac) storagePath = '~/Library/Application Support/Firefox/Profiles/<profile>/storage/default';
+        else if (isLinux) storagePath = '~/.mozilla/firefox/<profile>/storage/default';
+    } else if (ua.indexOf('Safari') !== -1 && ua.indexOf('Chrome') === -1) {
+        browserName = 'Safari';
+        storagePath = '~/Library/Safari/Databases';
+    } else {
+        browserName = 'this browser';
+    }
+    // Build the modal content
+    let html = `
+        <div style="text-align:left;">
+            <p style="margin-bottom:12px;">The SQLite database <strong>"${escapeHtml(dbName)}"</strong> is stored in <strong>${browserName}</strong>'s IndexedDB storage.</p>
+    `;
+    if (storagePath) {
+        html += `
+            <div style="background:var(--gray-100);border:1px solid var(--gray-300);border-radius:8px;padding:12px;margin-bottom:12px;font-family:monospace;font-size:0.8rem;word-break:break-all;color:var(--gray-800);">
+                ${escapeHtml(storagePath)}
+            </div>
+            <div style="display:flex;gap:8px;margin-bottom:16px;">
+                <button class="btn-primary" onclick="copyDBPath()">Copy Path</button>
+            </div>
+        `;
+    } else {
+        html += `<p style="margin-bottom:12px;color:var(--gray-500);">Could not determine the exact folder for this browser/OS combination.</p>`;
+    }
+    html += `
+            <p style="font-size:0.8rem;color:var(--gray-500);">
+                To back up your data, use the <strong>Export Database</strong> button instead — it saves a portable <code>.db</code> file you can store anywhere.
+            </p>
+        </div>
+    `;
+    // Store the path so the copy button can use it
+    window._dbStoragePath = storagePath;
+    // Reuse the existing modal infrastructure
+    const modal = document.getElementById('dbLocationModal');
+    if (modal) {
+        document.getElementById('dbLocationContent').innerHTML = html;
+        openModal('dbLocationModal');
+    } else {
+        // Create a temporary modal dynamically
+        const overlay = document.createElement('div');
+        overlay.className = 'modal-overlay active';
+        overlay.id = 'dbLocationOverlay';
+        overlay.onclick = function(e) { if (e.target === overlay) { overlay.remove(); } };
+        overlay.innerHTML = `
+            <div class="modal active" style="max-width:520px;">
+                <div class="modal-header">
+                    <h3>Database Storage Location</h3>
+                    <button class="modal-close" onclick="document.getElementById('dbLocationOverlay').remove()">&times;</button>
+                </div>
+                <div class="modal-body" style="padding:20px;">
+                    ${html}
+                </div>
+            </div>
+        `;
+        document.body.appendChild(overlay);
+    }
+}
+function copyDBPath() {
+    const path = window._dbStoragePath || '';
+    if (!path) return;
+    navigator.clipboard.writeText(path).then(() => {
+        showToast('Path copied to clipboard', 'success');
+    }).catch(() => {
+        // Fallback for older browsers
+        const ta = document.createElement('textarea');
+        ta.value = path;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+        showToast('Path copied to clipboard', 'success');
+    });
+}
 function exportDatabase() {
     if (!DB._db) {
         showToast('No SQLite database available', 'error');
