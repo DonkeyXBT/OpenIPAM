@@ -170,7 +170,7 @@ function refreshCompaniesGrid() {
                 </div>
                 <div class="company-card-header">
                     <div class="company-card-icon" style="background: ${company.color}">
-                        ${company.code ? company.code.substring(0, 2) : company.name.substring(0, 2).toUpperCase()}
+                        ${company.code ? company.code.substring(0, 3) : company.name.substring(0, 3).toUpperCase()}
                     </div>
                     <div class="company-card-title">
                         <h3>${escapeHtml(company.name)}</h3>

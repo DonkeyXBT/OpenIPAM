@@ -53,7 +53,22 @@ const SubnetManager = {
         };
         subnets.push(newSubnet);
         DB.set(DB.KEYS.SUBNETS, subnets);
-        return { success: true, message: 'Subnet added successfully', subnet: newSubnet };
+        // Auto-link existing IPs that fall within this new subnet's range
+        const ips = DB.get(DB.KEYS.IPS);
+        let linkedCount = 0;
+        ips.forEach(ip => {
+            if (!ip.subnetId && IPUtils.isIPInSubnet(ip.ipAddress, networkAddress, newSubnet.cidr)) {
+                ip.subnetId = newSubnet.id;
+                linkedCount++;
+            }
+        });
+        if (linkedCount > 0) {
+            DB.set(DB.KEYS.IPS, ips);
+        }
+        const msg = linkedCount > 0
+            ? `Subnet added successfully (${linkedCount} existing IP${linkedCount > 1 ? 's' : ''} linked)`
+            : 'Subnet added successfully';
+        return { success: true, message: msg, subnet: newSubnet };
     },
     update(id, updates) {
         const subnets = DB.get(DB.KEYS.SUBNETS);
@@ -63,6 +78,23 @@ const SubnetManager = {
         }
         subnets[index] = { ...subnets[index], ...updates, updatedAt: new Date().toISOString() };
         DB.set(DB.KEYS.SUBNETS, subnets);
+        // Re-link orphaned IPs that now fall within the updated subnet
+        const updatedSubnet = subnets[index];
+        const network = updates.network
+            ? IPUtils.getNetworkAddress(updates.network, updatedSubnet.cidr)
+            : updatedSubnet.network;
+        const cidr = updatedSubnet.cidr;
+        const ips = DB.get(DB.KEYS.IPS);
+        let changed = false;
+        ips.forEach(ip => {
+            if (!ip.subnetId && IPUtils.isIPInSubnet(ip.ipAddress, network, cidr)) {
+                ip.subnetId = id;
+                changed = true;
+            }
+        });
+        if (changed) {
+            DB.set(DB.KEYS.IPS, ips);
+        }
         return { success: true, message: 'Subnet updated successfully' };
     },
     delete(id) {

@@ -34,7 +34,7 @@ const CompanyManager = {
         const newCompany = {
             id: DB.generateId(),
             name: data.name,
-            code: data.code || data.name.substring(0, 4).toUpperCase(),
+            code: data.code || data.name.substring(0, 3).toUpperCase(),
             contact: data.contact || '',
             email: data.email || '',
             color: data.color || '#3b82f6',
