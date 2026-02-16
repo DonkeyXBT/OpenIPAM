@@ -1,15 +1,15 @@
 <p align="center">
   <h1 align="center">OpenIPAM</h1>
   <p align="center">
-    <strong>Open-source IP Address Management & CMDB that runs entirely in your browser.</strong>
+    <strong>Open-source IP Address Management & CMDB that runs entirely in your browser -- or on a server.</strong>
   </p>
   <p align="center">
-    No servers. No accounts. No cost. Just open and go.
+    No accounts. No cost. Browser-only or full backend -- your choice.
   </p>
   <p align="center">
     <a href="#-quick-start">Quick Start</a> &middot;
+    <a href="#-server-mode">Server Mode</a> &middot;
     <a href="#-features">Features</a> &middot;
-    <a href="#-screenshots">Screenshots</a> &middot;
     <a href="#-keyboard-shortcuts">Shortcuts</a> &middot;
     <a href="#-contributing">Contributing</a>
   </p>
@@ -22,16 +22,19 @@
 Most IPAM tools are either expensive enterprise software or require complex server setups. OpenIPAM is different:
 
 - **Zero install** -- download and open `index.html`. That's it.
+- **Dual mode** -- runs fully in the browser, or deploy with a Python Flask backend for multi-user server access
 - **Runs offline** -- everything happens in your browser, no internet needed after first load
-- **Your data stays yours** -- stored locally in SQLite via WebAssembly, never sent anywhere
+- **Your data stays yours** -- stored locally in SQLite via WebAssembly, or server-side when using the backend
 - **Scales to thousands of hosts** -- SQLite + IndexedDB supports hundreds of MB of data
-- **Full-featured** -- not a toy. 14 host types, VLAN management, IP conflict detection, subnet calculator, maintenance scheduling, audit logging, and more
+- **Full-featured** -- not a toy. 14 host types, VLAN management, DHCP scope tracking, IP conflict detection, subnet calculator, maintenance scheduling, audit logging, and more
 
 Perfect for homelabs, small businesses, network engineers, IT departments, and anyone tired of tracking IPs in spreadsheets.
 
 ---
 
 ## Quick Start
+
+### Browser-Only Mode (No Server Required)
 
 ```bash
 # Clone it
@@ -48,6 +51,87 @@ Or just download the ZIP, extract, and open `index.html` directly.
 
 > **Tip:** For the best experience, serve the files over HTTP. The SQLite WebAssembly engine loads fastest this way. If opened as a file directly, it falls back to localStorage automatically.
 
+### Server Mode (Python Flask Backend)
+
+```bash
+# Clone it
+git clone https://github.com/DonkeyXBT/OpenIPAM.git
+cd OpenIPAM
+
+# Automated setup (Linux)
+chmod +x setup.sh
+./setup.sh
+
+# Or manual setup
+cd backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+python app.py
+
+# Open http://localhost:5000
+```
+
+The app automatically detects the backend: if `/api/v1/health` responds, all data routes through the REST API with server-side SQLite. If the backend is unavailable, it falls back to client-side SQLite seamlessly.
+
+---
+
+## Server Mode
+
+The Python Flask backend provides:
+
+- **Server-side SQLite** -- persistent database at `backend/openipam.db`
+- **REST API** -- full CRUD at `/api/v1/` for all entities
+- **Serves the frontend** -- no separate web server needed
+- **JSON backup/import** via API endpoints
+- **Cross-entity search** via `/api/v1/search?q=`
+- **Dashboard stats** via `/api/v1/dashboard`
+
+### Linux Setup Script
+
+The `setup.sh` script automates deployment on Linux:
+
+- Auto-detects distro (Ubuntu/Debian, CentOS/RHEL, Fedora, Arch)
+- Installs Python 3 + pip + venv if missing
+- Creates a virtualenv and installs Flask dependencies
+- Initializes the SQLite database
+- Optionally creates a **systemd service** for auto-start
+- Idempotent -- safe to run multiple times
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/v1/health` | GET | Backend health check |
+| `/api/v1/dashboard` | GET | Aggregated statistics |
+| `/api/v1/search?q=` | GET | Cross-entity search |
+| `/api/v1/companies` | GET, POST | List/create companies |
+| `/api/v1/companies/<id>` | GET, PUT, DELETE | Get/update/delete company |
+| `/api/v1/subnets` | GET, POST | List/create subnets |
+| `/api/v1/hosts` | GET, POST | List/create hosts |
+| `/api/v1/ips` | GET, POST | List/create IPs |
+| `/api/v1/vlans` | GET, POST | List/create VLANs |
+| `/api/v1/ip_ranges` | GET, POST | List/create IP ranges |
+| `/api/v1/locations` | GET, POST | List/create locations |
+| `/api/v1/maintenance` | GET, POST | List/create maintenance windows |
+| `/api/v1/templates` | GET, POST | List/create subnet templates |
+| `/api/v1/dhcp/scopes` | GET, POST | List/create DHCP scopes |
+| `/api/v1/dhcp/leases` | GET, POST | List/create DHCP leases |
+| `/api/v1/dhcp/reservations` | GET, POST | List/create DHCP reservations |
+| `/api/v1/dhcp/options` | GET, POST | List/create DHCP options |
+| `/api/v1/settings` | GET, PUT | Get/update settings |
+| `/api/v1/audit_log` | GET, DELETE | List/clear audit log |
+| `/api/v1/backup` | GET, POST | Export/import full backup |
+
+All entity endpoints also support `GET /<id>`, `PUT /<id>`, and `DELETE /<id>`.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `OPENIPAM_DB_PATH` | `backend/openipam.db` | Path to SQLite database file |
+| `PORT` | `5000` | Port to listen on |
+
 ---
 
 ## Features
@@ -63,6 +147,16 @@ Or just download the ZIP, extract, and open `index.html` directly.
 | **Subnet Calculator** | CIDR math, supernet calculation, subnet splitting |
 | **Subnet Templates** | 6 built-in templates for one-click subnet provisioning |
 
+### DHCP Scope Management
+| Feature | Details |
+|---------|---------|
+| **Scopes** | Define DHCP pools with start/end IP, lease time, DNS, gateway, domain |
+| **Leases** | Track active, expired, and reserved leases with MAC/hostname |
+| **Reservations** | Pin IP-to-MAC mappings within a scope |
+| **Options** | Configure DHCP options per scope (Subnet Mask, Router, DNS, Domain, NTP, TFTP, etc.) |
+| **Utilization** | Visual utilization bars showing scope usage at a glance |
+| **Scope Detail** | Drill-down view with inline options editor, linked leases, and reservations |
+
 ### Infrastructure (CMDB)
 | Feature | Details |
 |---------|---------|
@@ -75,7 +169,7 @@ Or just download the ZIP, extract, and open `index.html` directly.
 ### Productivity
 | Feature | Details |
 |---------|---------|
-| **Global Search** | Press `/` to instantly search across all entities |
+| **Global Search** | Press `/` to instantly search across all entities (including DHCP scopes) |
 | **Keyboard Shortcuts** | Vim-style navigation (`g d`, `g h`, `g s`...) and actions |
 | **Right-Click Menus** | Context-aware actions on any table row |
 | **Saved Filters** | Bookmark your frequently used filter combinations |
@@ -87,9 +181,10 @@ Or just download the ZIP, extract, and open `index.html` directly.
 | Feature | Details |
 |---------|---------|
 | **CSV Import/Export** | Import hosts from CSV with duplicate detection and error reporting |
-| **JSON Backup/Restore** | Full database snapshots for portability and disaster recovery |
+| **JSON Backup/Restore** | Full database snapshots including DHCP data for portability and disaster recovery |
 | **Audit Log** | Every create, update, and delete tracked with old/new values |
 | **IP History** | Complete assignment timeline for every IP address |
+| **Dual-Mode Sync** | Seamlessly switch between browser-only and server-backed storage |
 
 ---
 
@@ -109,6 +204,7 @@ Or just download the ZIP, extract, and open `index.html` directly.
 | **IP Addresses** | IPAM view with assign/release/reserve workflow |
 | **IP Ranges** | Range allocation with overlap detection |
 | **Locations** | Rack visualization with U-position tracking |
+| **DHCP Scopes** | Scope management with tabbed Scopes/Leases/Reservations views |
 | **Templates** | One-click subnet provisioning from templates |
 | **Maintenance** | Scheduling with recurring patterns and host/subnet linking |
 | **IP History** | Per-IP assignment timeline |
@@ -142,12 +238,13 @@ Press `?` in the app to see all shortcuts.
 
 ## How Data is Stored
 
-OpenIPAM uses **SQLite** running in your browser via [sql.js](https://github.com/sql-js/sql.js) (WebAssembly). The database is persisted to **IndexedDB**, giving you hundreds of MB of storage -- far beyond localStorage's 5MB limit.
+OpenIPAM supports two storage modes that are automatically detected:
 
+### Browser-Only Mode
 ```
 Browser
   |-- sql.js (SQLite compiled to WebAssembly)
-  |     |-- 14 relational tables with proper types and constraints
+  |     |-- 18 relational tables with proper types and constraints
   |     |-- Key-value settings table
   |
   |-- IndexedDB (persistence layer)
@@ -155,8 +252,26 @@ Browser
         |-- Auto-saved 500ms after every write
 ```
 
+### Server Mode
+```
+Flask Backend (Python)
+  |-- SQLite database (backend/openipam.db)
+  |     |-- WAL mode for concurrent reads
+  |     |-- Foreign keys enabled
+  |     |-- 18 tables matching browser schema exactly
+  |
+  |-- REST API (/api/v1/)
+  |     |-- Full CRUD for all entities
+  |     |-- JSON backup/import
+  |     |-- Cross-entity search
+  |
+  |-- Serves frontend files (index.html, styles.css, modules/*)
+```
+
 **Key points:**
-- Data never leaves your browser
+- In browser mode, data never leaves your browser
+- In server mode, data persists in a server-side SQLite file
+- The frontend auto-detects which mode to use via `/api/v1/health`
 - Automatic migration from localStorage if upgrading from an older version
 - Graceful fallback to localStorage if WebAssembly is unavailable
 - Use **Import/Export > Backup** to create portable JSON snapshots
@@ -182,25 +297,28 @@ A sample CSV (`sample_inventory.csv`) with 20 hosts is included for testing.
 OpenIPAM/
   index.html                     Single-page application (all views and modals)
   styles.css                     Complete stylesheet with dark mode via CSS variables
+  setup.sh                       Automated Linux setup script
   sample_inventory.csv           Example CSV with 20 hosts for testing
   modules/
-    db.js                        SQLite database layer with IndexedDB persistence
+    db.js                        SQLite database layer with IndexedDB persistence + backend detection
+    api.js                       REST API client layer (auto-used when backend is available)
     init.js                      App bootstrap and page routing
     ui.js                        UI rendering and event handling
     utils.js                     IP/MAC utilities and formatting helpers
-    constants.js                 Enumerations (host types, VLAN types, etc.)
+    constants.js                 Enumerations (host types, VLAN types, DHCP options, etc.)
     settings.js                  User preference management
     company-manager.js           Company CRUD
     subnet-manager.js            Subnet CRUD and capacity calculations
     host-manager.js              Host management with IP auto-assignment
     ip-manager.js                IP address CRUD, assignment, reservation
     vlan-manager.js              VLAN management
+    dhcp-manager.js              DHCP scope, lease, reservation, and option management
     location-manager.js          Datacenter/rack hierarchy
     ip-range-manager.js          IP range allocation and overlap detection
     subnet-template-manager.js   Template management and application
     maintenance-manager.js       Maintenance window scheduling
     conflict-detector.js         IP conflict detection engine
-    global-search.js             Cross-entity instant search
+    global-search.js             Cross-entity instant search (including DHCP)
     keyboard-shortcuts.js        Hotkey handling
     context-menu.js              Right-click menu system
     saved-filters.js             Filter persistence
@@ -209,6 +327,24 @@ OpenIPAM/
     audit-log.js                 Activity logging with change tracking
     ip-history.js                IP assignment timeline
     hardware-lifecycle.js        Warranty/EOL tracking and alerts
+  backend/
+    app.py                       Flask application (serves frontend + REST API)
+    database.py                  SQLite schema and connection management
+    requirements.txt             Python dependencies (Flask, flask-cors)
+    routes/
+      companies.py               Company CRUD endpoints
+      subnets.py                 Subnet CRUD endpoints
+      hosts.py                   Host CRUD endpoints
+      ips.py                     IP address CRUD endpoints
+      vlans.py                   VLAN CRUD endpoints
+      ip_ranges.py               IP range CRUD endpoints
+      dhcp.py                    DHCP scope/lease/reservation/option endpoints
+      locations.py               Location CRUD endpoints
+      maintenance.py             Maintenance window CRUD endpoints
+      templates.py               Subnet template CRUD endpoints
+      audit_log.py               Audit log read + helper
+      settings.py                Settings key-value endpoints
+      backup.py                  Full JSON export/import endpoints
 ```
 
 ---
@@ -218,11 +354,13 @@ OpenIPAM/
 | Layer | Technology |
 |-------|-----------|
 | **Frontend** | Vanilla HTML5, CSS3, JavaScript (ES6+) |
-| **Database** | SQLite via [sql.js](https://github.com/sql-js/sql.js) WebAssembly |
-| **Persistence** | IndexedDB (primary) with localStorage fallback |
+| **Database (Browser)** | SQLite via [sql.js](https://github.com/sql-js/sql.js) WebAssembly |
+| **Database (Server)** | SQLite with WAL mode |
+| **Backend** | Python Flask with flask-cors |
+| **Persistence** | IndexedDB (browser) or server-side SQLite file |
 | **Theming** | CSS custom properties with dark mode |
 | **Typography** | Google Fonts (Inter) |
-| **Build tools** | None. Zero dependencies. Just files. |
+| **Build tools** | None. Zero build step. Just files + optional `pip install`. |
 
 ## Browser Support
 
@@ -242,11 +380,11 @@ Requires WebAssembly and ES6+ support. Falls back gracefully on older browsers.
 Contributions are welcome! Here are some areas where help would be appreciated:
 
 - **Network topology visualization** -- diagram view of subnets and VLANs
-- **DHCP scope management** -- track pools, leases, and reservations
 - **DNS record management** -- forward/reverse records tied to IPs
 - **Advanced reporting** -- utilization trends, capacity forecasting, PDF export
 - **Stale IP detection** -- flag IPs not updated in X days
 - **Notification system** -- in-app alerts for warranty expiry, IP exhaustion
+- **Authentication** -- optional user login for the Flask backend
 
 1. Fork the repo
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
