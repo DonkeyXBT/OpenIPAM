@@ -46,6 +46,9 @@ function navigateTo(page) {
         case 'locations':
             refreshLocationsTable();
             break;
+        case 'dhcp':
+            refreshDHCPScopesTable();
+            break;
         case 'import':
             populateImportCompanySelect();
             break;
@@ -1021,7 +1024,7 @@ function exportToCSV() {
 }
 function backupDatabase() {
     const backup = {
-        version: 4,
+        version: 5,
         timestamp: new Date().toISOString(),
         companies: DB.get(DB.KEYS.COMPANIES),
         subnets: DB.get(DB.KEYS.SUBNETS),
@@ -1034,7 +1037,11 @@ function backupDatabase() {
         ipHistory: DB.get(DB.KEYS.IP_HISTORY),
         maintenanceWindows: DB.get(DB.KEYS.MAINTENANCE_WINDOWS),
         auditLog: DB.get(DB.KEYS.AUDIT_LOG),
-        settings: DB.get(DB.KEYS.SETTINGS)
+        settings: DB.get(DB.KEYS.SETTINGS),
+        dhcpScopes: DB.get(DB.KEYS.DHCP_SCOPES),
+        dhcpOptions: DB.get(DB.KEYS.DHCP_OPTIONS),
+        dhcpLeases: DB.get(DB.KEYS.DHCP_LEASES),
+        dhcpReservations: DB.get(DB.KEYS.DHCP_RESERVATIONS)
     };
     const json = JSON.stringify(backup, null, 2);
     downloadFile(json, `netmanager_backup_${new Date().toISOString().split('T')[0]}.json`, 'application/json');
@@ -1065,6 +1072,10 @@ function restoreDatabase(event) {
             if (backup.settings) {
                 DB.set(DB.KEYS.SETTINGS, backup.settings);
             }
+            DB.set(DB.KEYS.DHCP_SCOPES, backup.dhcpScopes || []);
+            DB.set(DB.KEYS.DHCP_OPTIONS, backup.dhcpOptions || []);
+            DB.set(DB.KEYS.DHCP_LEASES, backup.dhcpLeases || []);
+            DB.set(DB.KEYS.DHCP_RESERVATIONS, backup.dhcpReservations || []);
             showToast('Database restored successfully', 'success');
             navigateTo('dashboard');
         } catch (err) {
@@ -2987,6 +2998,465 @@ function showManageFiltersModal() {
         </ul>`;
     openModal('manageFiltersModal');
 }
+// === DHCP Scope Management UI ===
+function switchDHCPTab(tab) {
+    document.querySelectorAll('.dhcp-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.dhcp-tab-content').forEach(c => c.classList.remove('active'));
+    document.querySelector(`.dhcp-tab[onclick*="${tab}"]`).classList.add('active');
+    document.getElementById(`dhcp${tab.charAt(0).toUpperCase() + tab.slice(1)}Tab`).classList.add('active');
+    if (tab === 'scopes') refreshDHCPScopesTable();
+    else if (tab === 'leases') refreshDHCPLeasesTable();
+    else if (tab === 'reservations') refreshDHCPReservationsTable();
+}
+
+function refreshDHCPScopesTable() {
+    const scopes = DHCPManager.getAllScopes();
+    const tbody = document.getElementById('dhcpScopesTable').querySelector('tbody');
+    if (scopes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="empty-message">No DHCP scopes configured</td></tr>';
+        return;
+    }
+    tbody.innerHTML = scopes.map(scope => {
+        const barClass = scope.utilization >= 90 ? 'high' : scope.utilization >= 70 ? 'medium' : 'low';
+        const leaseHours = Math.round((scope.leaseTime || 86400) / 3600);
+        return `
+            <tr>
+                <td><strong>${escapeHtml(scope.name || '-')}</strong></td>
+                <td>${escapeHtml(scope.subnetName)}</td>
+                <td style="font-family: monospace;">${escapeHtml(scope.startIP)} - ${escapeHtml(scope.endIP)}</td>
+                <td>${leaseHours}h</td>
+                <td>
+                    <div class="usage-bar-container">
+                        <div class="usage-bar">
+                            <div class="usage-bar-fill ${barClass}" style="width: ${scope.utilization}%"></div>
+                        </div>
+                        <span class="usage-text">${scope.used}/${scope.totalIPs} (${scope.utilization}%)</span>
+                    </div>
+                </td>
+                <td>
+                    <span class="dhcp-status-badge ${scope.enabled ? 'enabled' : 'disabled'}">
+                        ${scope.enabled ? 'Enabled' : 'Disabled'}
+                    </span>
+                </td>
+                <td>
+                    <div class="action-btns">
+                        <button class="btn-icon view" onclick="showDHCPScopeDetail('${scope.id}')" title="Details">👁</button>
+                        <button class="btn-icon edit" onclick="editDHCPScope('${scope.id}')" title="Edit">✏️</button>
+                        <button class="btn-icon delete" onclick="deleteDHCPScope('${scope.id}')" title="Delete">🗑️</button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function refreshDHCPLeasesTable() {
+    const leases = DHCPManager.getAllLeases();
+    const tbody = document.getElementById('dhcpLeasesTable').querySelector('tbody');
+    if (leases.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="empty-message">No DHCP leases found</td></tr>';
+        return;
+    }
+    tbody.innerHTML = leases.map(lease => {
+        const statusObj = DHCP_LEASE_STATUS.find(s => s.id === lease.status) || DHCP_LEASE_STATUS[0];
+        const startStr = lease.startTime ? new Date(lease.startTime).toLocaleString() : '-';
+        const endStr = lease.endTime ? new Date(lease.endTime).toLocaleString() : '-';
+        return `
+            <tr>
+                <td style="font-family: monospace;">${escapeHtml(lease.ipAddress)}</td>
+                <td style="font-family: monospace;">${escapeHtml(lease.macAddress || '-')}</td>
+                <td>${escapeHtml(lease.hostname || '-')}</td>
+                <td>${escapeHtml(lease.scopeName)}</td>
+                <td><span class="dhcp-lease-badge" style="background: ${statusObj.color}15; color: ${statusObj.color};">${statusObj.name}</span></td>
+                <td>${startStr}</td>
+                <td>${endStr}</td>
+                <td>
+                    <div class="action-btns">
+                        <button class="btn-icon edit" onclick="editDHCPLease('${lease.id}')" title="Edit">✏️</button>
+                        <button class="btn-icon delete" onclick="deleteDHCPLease('${lease.id}')" title="Delete">🗑️</button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+function refreshDHCPReservationsTable() {
+    const reservations = DHCPManager.getReservations();
+    const tbody = document.getElementById('dhcpReservationsTable').querySelector('tbody');
+    if (reservations.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty-message">No DHCP reservations configured</td></tr>';
+        return;
+    }
+    tbody.innerHTML = reservations.map(res => `
+        <tr>
+            <td style="font-family: monospace;">${escapeHtml(res.ipAddress)}</td>
+            <td style="font-family: monospace;">${escapeHtml(res.macAddress || '-')}</td>
+            <td>${escapeHtml(res.hostname || '-')}</td>
+            <td>${escapeHtml(res.scopeName)}</td>
+            <td>${escapeHtml(res.description || '-')}</td>
+            <td>
+                <div class="action-btns">
+                    <button class="btn-icon edit" onclick="editDHCPReservation('${res.id}')" title="Edit">✏️</button>
+                    <button class="btn-icon delete" onclick="deleteDHCPReservation('${res.id}')" title="Delete">🗑️</button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function populateDHCPScopeSubnetSelect(selectId) {
+    const subnets = SubnetManager.getAll();
+    const select = document.getElementById(selectId);
+    select.innerHTML = '<option value="">-- Select Subnet --</option>' +
+        subnets.map(s => `<option value="${s.id}">${s.network}/${s.cidr}${s.name ? ' (' + escapeHtml(s.name) + ')' : ''}</option>`).join('');
+}
+
+function populateDHCPScopeSelect(selectId) {
+    const scopes = DHCPManager.getAllScopes();
+    const select = document.getElementById(selectId);
+    select.innerHTML = '<option value="">-- Select Scope --</option>' +
+        scopes.map(s => `<option value="${s.id}">${escapeHtml(s.name || s.startIP + ' - ' + s.endIP)} (${escapeHtml(s.subnetName)})</option>`).join('');
+}
+
+function showAddDHCPScopeModal() {
+    document.getElementById('dhcpScopeForm').reset();
+    document.getElementById('dhcpScopeEditId').value = '';
+    document.getElementById('dhcpScopeEnabled').checked = true;
+    document.getElementById('dhcpScopeLeaseTime').value = '86400';
+    populateDHCPScopeSubnetSelect('dhcpScopeSubnet');
+    document.querySelector('#addDHCPScopeModal .modal-header h3').textContent = 'Add DHCP Scope';
+    openModal('addDHCPScopeModal');
+}
+
+function editDHCPScope(id) {
+    const scope = DHCPManager.getScopeById(id);
+    if (!scope) return;
+    populateDHCPScopeSubnetSelect('dhcpScopeSubnet');
+    document.getElementById('dhcpScopeName').value = scope.name || '';
+    document.getElementById('dhcpScopeSubnet').value = scope.subnetId || '';
+    document.getElementById('dhcpScopeStartIP').value = scope.startIP || '';
+    document.getElementById('dhcpScopeEndIP').value = scope.endIP || '';
+    document.getElementById('dhcpScopeLeaseTime').value = scope.leaseTime || 86400;
+    document.getElementById('dhcpScopeGateway').value = scope.gateway || '';
+    document.getElementById('dhcpScopeDNS').value = scope.dns || '';
+    document.getElementById('dhcpScopeDomain').value = scope.domain || '';
+    document.getElementById('dhcpScopeEnabled').checked = !!scope.enabled;
+    document.getElementById('dhcpScopeNotes').value = scope.notes || '';
+    document.getElementById('dhcpScopeEditId').value = id;
+    document.querySelector('#addDHCPScopeModal .modal-header h3').textContent = 'Edit DHCP Scope';
+    openModal('addDHCPScopeModal');
+}
+
+function saveDHCPScope(e) {
+    e.preventDefault();
+    const id = document.getElementById('dhcpScopeEditId').value;
+    const data = {
+        name: document.getElementById('dhcpScopeName').value,
+        subnetId: document.getElementById('dhcpScopeSubnet').value,
+        startIP: document.getElementById('dhcpScopeStartIP').value,
+        endIP: document.getElementById('dhcpScopeEndIP').value,
+        leaseTime: document.getElementById('dhcpScopeLeaseTime').value,
+        gateway: document.getElementById('dhcpScopeGateway').value,
+        dns: document.getElementById('dhcpScopeDNS').value,
+        domain: document.getElementById('dhcpScopeDomain').value,
+        enabled: document.getElementById('dhcpScopeEnabled').checked,
+        notes: document.getElementById('dhcpScopeNotes').value
+    };
+    let result;
+    if (id) {
+        result = DHCPManager.updateScope(id, data);
+    } else {
+        result = DHCPManager.addScope(data);
+    }
+    if (result.success) {
+        showToast(result.message, 'success');
+        closeModal();
+        refreshDHCPScopesTable();
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+function deleteDHCPScope(id) {
+    const scope = DHCPManager.getScopeById(id);
+    if (!scope) return;
+    if (!confirm(`Delete DHCP scope "${scope.name || scope.startIP + ' - ' + scope.endIP}"? This will also delete all associated leases, reservations, and options.`)) return;
+    const result = DHCPManager.deleteScope(id);
+    if (result.success) {
+        showToast(result.message, 'success');
+        refreshDHCPScopesTable();
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+function showAddDHCPLeaseModal() {
+    document.getElementById('dhcpLeaseForm').reset();
+    document.getElementById('dhcpLeaseEditId').value = '';
+    populateDHCPScopeSelect('dhcpLeaseScope');
+    document.querySelector('#addDHCPLeaseModal .modal-header h3').textContent = 'Add DHCP Lease';
+    openModal('addDHCPLeaseModal');
+}
+
+function editDHCPLease(id) {
+    const leases = DB.get(DB.KEYS.DHCP_LEASES);
+    const lease = leases.find(l => l.id === id);
+    if (!lease) return;
+    populateDHCPScopeSelect('dhcpLeaseScope');
+    document.getElementById('dhcpLeaseScope').value = lease.scopeId || '';
+    document.getElementById('dhcpLeaseIP').value = lease.ipAddress || '';
+    document.getElementById('dhcpLeaseMAC').value = lease.macAddress || '';
+    document.getElementById('dhcpLeaseHostname').value = lease.hostname || '';
+    document.getElementById('dhcpLeaseStatus').value = lease.status || 'active';
+    if (lease.startTime) document.getElementById('dhcpLeaseStart').value = lease.startTime.slice(0, 16);
+    if (lease.endTime) document.getElementById('dhcpLeaseEnd').value = lease.endTime.slice(0, 16);
+    document.getElementById('dhcpLeaseNotes').value = lease.notes || '';
+    document.getElementById('dhcpLeaseEditId').value = id;
+    document.querySelector('#addDHCPLeaseModal .modal-header h3').textContent = 'Edit DHCP Lease';
+    openModal('addDHCPLeaseModal');
+}
+
+function saveDHCPLease(e) {
+    e.preventDefault();
+    const id = document.getElementById('dhcpLeaseEditId').value;
+    const data = {
+        scopeId: document.getElementById('dhcpLeaseScope').value,
+        ipAddress: document.getElementById('dhcpLeaseIP').value,
+        macAddress: document.getElementById('dhcpLeaseMAC').value,
+        hostname: document.getElementById('dhcpLeaseHostname').value,
+        status: document.getElementById('dhcpLeaseStatus').value,
+        startTime: document.getElementById('dhcpLeaseStart').value ? new Date(document.getElementById('dhcpLeaseStart').value).toISOString() : '',
+        endTime: document.getElementById('dhcpLeaseEnd').value ? new Date(document.getElementById('dhcpLeaseEnd').value).toISOString() : '',
+        notes: document.getElementById('dhcpLeaseNotes').value
+    };
+    let result;
+    if (id) {
+        result = DHCPManager.updateLease(id, data);
+    } else {
+        result = DHCPManager.addLease(data);
+    }
+    if (result.success) {
+        showToast(result.message, 'success');
+        closeModal();
+        refreshDHCPLeasesTable();
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+function deleteDHCPLease(id) {
+    if (!confirm('Delete this DHCP lease?')) return;
+    const result = DHCPManager.deleteLease(id);
+    if (result.success) {
+        showToast(result.message, 'success');
+        refreshDHCPLeasesTable();
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+function showAddDHCPReservationModal() {
+    document.getElementById('dhcpReservationForm').reset();
+    document.getElementById('dhcpResEditId').value = '';
+    populateDHCPScopeSelect('dhcpResScope');
+    document.querySelector('#addDHCPReservationModal .modal-header h3').textContent = 'Add DHCP Reservation';
+    openModal('addDHCPReservationModal');
+}
+
+function editDHCPReservation(id) {
+    const reservations = DB.get(DB.KEYS.DHCP_RESERVATIONS);
+    const res = reservations.find(r => r.id === id);
+    if (!res) return;
+    populateDHCPScopeSelect('dhcpResScope');
+    document.getElementById('dhcpResScope').value = res.scopeId || '';
+    document.getElementById('dhcpResIP').value = res.ipAddress || '';
+    document.getElementById('dhcpResMAC').value = res.macAddress || '';
+    document.getElementById('dhcpResHostname').value = res.hostname || '';
+    document.getElementById('dhcpResDescription').value = res.description || '';
+    document.getElementById('dhcpResEditId').value = id;
+    document.querySelector('#addDHCPReservationModal .modal-header h3').textContent = 'Edit DHCP Reservation';
+    openModal('addDHCPReservationModal');
+}
+
+function saveDHCPReservation(e) {
+    e.preventDefault();
+    const id = document.getElementById('dhcpResEditId').value;
+    const data = {
+        scopeId: document.getElementById('dhcpResScope').value,
+        ipAddress: document.getElementById('dhcpResIP').value,
+        macAddress: document.getElementById('dhcpResMAC').value,
+        hostname: document.getElementById('dhcpResHostname').value,
+        description: document.getElementById('dhcpResDescription').value
+    };
+    let result;
+    if (id) {
+        result = DHCPManager.updateReservation(id, data);
+    } else {
+        result = DHCPManager.addReservation(data);
+    }
+    if (result.success) {
+        showToast(result.message, 'success');
+        closeModal();
+        refreshDHCPReservationsTable();
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+function deleteDHCPReservation(id) {
+    if (!confirm('Delete this DHCP reservation?')) return;
+    const result = DHCPManager.deleteReservation(id);
+    if (result.success) {
+        showToast(result.message, 'success');
+        refreshDHCPReservationsTable();
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+function showDHCPScopeDetail(scopeId) {
+    const scopes = DHCPManager.getAllScopes();
+    const scope = scopes.find(s => s.id === scopeId);
+    if (!scope) return;
+    const leases = DHCPManager.getLeases(scopeId);
+    const reservations = DHCPManager.getReservations(scopeId);
+    const options = DHCPManager.getOptions(scopeId);
+    const utilization = DHCPManager.getScopeUtilization(scopeId);
+    const barClass = utilization.percentage >= 90 ? 'high' : utilization.percentage >= 70 ? 'medium' : 'low';
+
+    let html = `
+        <div class="dhcp-detail-header">
+            <h4>${escapeHtml(scope.name || 'Unnamed Scope')}</h4>
+            <span class="dhcp-status-badge ${scope.enabled ? 'enabled' : 'disabled'}">${scope.enabled ? 'Enabled' : 'Disabled'}</span>
+        </div>
+        <div class="dhcp-detail-info">
+            <div class="detail-row"><span class="label">Subnet:</span> <span>${escapeHtml(scope.subnetName)}</span></div>
+            <div class="detail-row"><span class="label">Range:</span> <span style="font-family:monospace;">${escapeHtml(scope.startIP)} - ${escapeHtml(scope.endIP)}</span></div>
+            <div class="detail-row"><span class="label">Gateway:</span> <span style="font-family:monospace;">${escapeHtml(scope.gateway || '-')}</span></div>
+            <div class="detail-row"><span class="label">DNS:</span> <span>${escapeHtml(scope.dns || '-')}</span></div>
+            <div class="detail-row"><span class="label">Domain:</span> <span>${escapeHtml(scope.domain || '-')}</span></div>
+            <div class="detail-row"><span class="label">Lease Time:</span> <span>${Math.round((scope.leaseTime || 86400) / 3600)} hours</span></div>
+        </div>
+        <div class="dhcp-detail-utilization">
+            <h4>Utilization</h4>
+            <div class="usage-bar-container" style="margin: 8px 0;">
+                <div class="usage-bar">
+                    <div class="usage-bar-fill ${barClass}" style="width: ${utilization.percentage}%"></div>
+                </div>
+                <span class="usage-text">${utilization.used}/${utilization.total} (${utilization.percentage}%)</span>
+            </div>
+            <div style="display:flex;gap:20px;color:var(--gray-500);font-size:0.85rem;">
+                <span>Active Leases: ${utilization.activeLeases}</span>
+                <span>Reserved: ${utilization.reserved}</span>
+                <span>Available: ${utilization.available}</span>
+            </div>
+        </div>
+    `;
+
+    // Options editor
+    html += `
+        <div class="dhcp-detail-section">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+                <h4>DHCP Options</h4>
+                <button class="btn-secondary btn-sm" onclick="addDHCPOptionInline('${scopeId}')">+ Add Option</button>
+            </div>
+            <div id="dhcpOptionsEditor">
+    `;
+    if (options.length === 0) {
+        html += '<p class="empty-state" style="padding:12px 0;">No custom options configured</p>';
+    } else {
+        html += '<table class="data-table" style="margin-top:8px;"><thead><tr><th>Code</th><th>Name</th><th>Value</th><th>Actions</th></tr></thead><tbody>';
+        options.forEach(opt => {
+            html += `<tr>
+                <td>${opt.optionCode}</td>
+                <td>${escapeHtml(opt.optionName || '-')}</td>
+                <td>${escapeHtml(opt.optionValue)}</td>
+                <td><button class="btn-icon delete" onclick="deleteDHCPOptionInline('${opt.id}', '${scopeId}')" title="Delete">🗑️</button></td>
+            </tr>`;
+        });
+        html += '</tbody></table>';
+    }
+    html += '</div></div>';
+
+    // Leases
+    html += `<div class="dhcp-detail-section"><h4>Leases (${leases.length})</h4>`;
+    if (leases.length > 0) {
+        html += '<table class="data-table" style="margin-top:8px;"><thead><tr><th>IP</th><th>MAC</th><th>Hostname</th><th>Status</th></tr></thead><tbody>';
+        leases.forEach(l => {
+            const st = DHCP_LEASE_STATUS.find(s => s.id === l.status) || DHCP_LEASE_STATUS[0];
+            html += `<tr><td style="font-family:monospace;">${escapeHtml(l.ipAddress)}</td><td style="font-family:monospace;">${escapeHtml(l.macAddress || '-')}</td><td>${escapeHtml(l.hostname || '-')}</td><td><span class="dhcp-lease-badge" style="background:${st.color}15;color:${st.color};">${st.name}</span></td></tr>`;
+        });
+        html += '</tbody></table>';
+    } else {
+        html += '<p class="empty-state" style="padding:12px 0;">No leases</p>';
+    }
+    html += '</div>';
+
+    // Reservations
+    html += `<div class="dhcp-detail-section"><h4>Reservations (${reservations.length})</h4>`;
+    if (reservations.length > 0) {
+        html += '<table class="data-table" style="margin-top:8px;"><thead><tr><th>IP</th><th>MAC</th><th>Hostname</th><th>Description</th></tr></thead><tbody>';
+        reservations.forEach(r => {
+            html += `<tr><td style="font-family:monospace;">${escapeHtml(r.ipAddress)}</td><td style="font-family:monospace;">${escapeHtml(r.macAddress || '-')}</td><td>${escapeHtml(r.hostname || '-')}</td><td>${escapeHtml(r.description || '-')}</td></tr>`;
+        });
+        html += '</tbody></table>';
+    } else {
+        html += '<p class="empty-state" style="padding:12px 0;">No reservations</p>';
+    }
+    html += '</div>';
+
+    if (scope.notes) {
+        html += `<div class="dhcp-detail-section"><h4>Notes</h4><p>${escapeHtml(scope.notes)}</p></div>`;
+    }
+
+    document.getElementById('dhcpScopeDetailContent').innerHTML = html;
+    document.querySelector('#dhcpScopeDetailModal .modal-header h3').textContent = `Scope: ${scope.name || scope.startIP + ' - ' + scope.endIP}`;
+    openModal('dhcpScopeDetailModal');
+}
+
+function addDHCPOptionInline(scopeId) {
+    const editor = document.getElementById('dhcpOptionsEditor');
+    const optionSelectHtml = DHCP_OPTION_TYPES.map(o => `<option value="${o.code}">${o.code} - ${o.name}</option>`).join('');
+    editor.innerHTML = `
+        <div style="display:flex;gap:8px;align-items:flex-end;margin-top:8px;">
+            <div class="form-group" style="margin:0;flex:1;">
+                <label style="font-size:0.8rem;">Option</label>
+                <select id="inlineOptionCode">${optionSelectHtml}</select>
+            </div>
+            <div class="form-group" style="margin:0;flex:1;">
+                <label style="font-size:0.8rem;">Value</label>
+                <input type="text" id="inlineOptionValue" placeholder="Value...">
+            </div>
+            <button class="btn-primary btn-sm" onclick="saveInlineDHCPOption('${scopeId}')">Add</button>
+        </div>
+    ` + editor.innerHTML;
+}
+
+function saveInlineDHCPOption(scopeId) {
+    const code = document.getElementById('inlineOptionCode').value;
+    const value = document.getElementById('inlineOptionValue').value;
+    if (!value) { showToast('Please enter a value', 'error'); return; }
+    const optType = DHCP_OPTION_TYPES.find(o => o.code === parseInt(code));
+    const result = DHCPManager.addOption({
+        scopeId,
+        optionCode: code,
+        optionName: optType ? optType.name : '',
+        optionValue: value
+    });
+    if (result.success) {
+        showToast(result.message, 'success');
+        showDHCPScopeDetail(scopeId);
+    } else {
+        showToast(result.message, 'error');
+    }
+}
+
+function deleteDHCPOptionInline(optionId, scopeId) {
+    DHCPManager.deleteOption(optionId);
+    showDHCPScopeDetail(scopeId);
+}
+
 document.addEventListener('DOMContentLoaded', () => {
     const compactBtn = document.getElementById('compactViewBtn');
     if (compactBtn && compactView) {

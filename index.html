@@ -111,6 +111,13 @@
                         </svg>
                         <span>Locations</span>
                     </li>
+                    <li class="nav-item" data-page="dhcp">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M5 12h14M12 5l7 7-7 7"/>
+                            <circle cx="5" cy="12" r="2"/>
+                        </svg>
+                        <span>DHCP Scopes</span>
+                    </li>
                 </ul>
             </div>
 
@@ -825,6 +832,86 @@
                                 <tr><td colspan="7" class="empty-message">No VLANs configured</td></tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- DHCP Scopes Page -->
+            <div id="dhcp" class="page">
+                <div class="page-header">
+                    <div class="page-title">
+                        <h2>DHCP Scope Management</h2>
+                        <p class="page-description">Track DHCP scopes, leases, reservations, and options</p>
+                    </div>
+                    <button class="btn-primary" onclick="showAddDHCPScopeModal()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="12" y1="5" x2="12" y2="19"/>
+                            <line x1="5" y1="12" x2="19" y2="12"/>
+                        </svg>
+                        Add Scope
+                    </button>
+                </div>
+                <div class="dhcp-tabs">
+                    <button class="dhcp-tab active" onclick="switchDHCPTab('scopes')">Scopes</button>
+                    <button class="dhcp-tab" onclick="switchDHCPTab('leases')">Leases</button>
+                    <button class="dhcp-tab" onclick="switchDHCPTab('reservations')">Reservations</button>
+                </div>
+                <div class="card">
+                    <div class="card-body no-padding">
+                        <div id="dhcpScopesTab" class="dhcp-tab-content active">
+                            <table class="data-table" id="dhcpScopesTable">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Subnet</th>
+                                        <th>Range</th>
+                                        <th>Lease Time</th>
+                                        <th>Utilization</th>
+                                        <th>Status</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="7" class="empty-message">No DHCP scopes configured</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="dhcpLeasesTab" class="dhcp-tab-content">
+                            <table class="data-table" id="dhcpLeasesTable">
+                                <thead>
+                                    <tr>
+                                        <th>IP Address</th>
+                                        <th>MAC Address</th>
+                                        <th>Hostname</th>
+                                        <th>Scope</th>
+                                        <th>Status</th>
+                                        <th>Start</th>
+                                        <th>End</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="8" class="empty-message">No DHCP leases found</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div id="dhcpReservationsTab" class="dhcp-tab-content">
+                            <table class="data-table" id="dhcpReservationsTable">
+                                <thead>
+                                    <tr>
+                                        <th>IP Address</th>
+                                        <th>MAC Address</th>
+                                        <th>Hostname</th>
+                                        <th>Scope</th>
+                                        <th>Description</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td colspan="6" class="empty-message">No DHCP reservations configured</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -2053,6 +2140,187 @@
         </div>
     </div>
 
+    <!-- Add/Edit DHCP Scope Modal -->
+    <div id="addDHCPScopeModal" class="modal">
+        <div class="modal-header">
+            <h3>Add DHCP Scope</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="dhcpScopeForm" onsubmit="saveDHCPScope(event)">
+                <div class="form-group">
+                    <label>Scope Name *</label>
+                    <input type="text" id="dhcpScopeName" placeholder="e.g., Office DHCP Pool" required>
+                </div>
+                <div class="form-group">
+                    <label>Subnet *</label>
+                    <select id="dhcpScopeSubnet" required>
+                        <option value="">-- Select Subnet --</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Start IP *</label>
+                        <input type="text" id="dhcpScopeStartIP" required placeholder="e.g., 192.168.1.100">
+                    </div>
+                    <div class="form-group">
+                        <label>End IP *</label>
+                        <input type="text" id="dhcpScopeEndIP" required placeholder="e.g., 192.168.1.200">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Lease Time (seconds)</label>
+                        <input type="number" id="dhcpScopeLeaseTime" value="86400" min="60">
+                        <span class="help-text">Default: 86400 (24 hours)</span>
+                    </div>
+                    <div class="form-group">
+                        <label>Gateway</label>
+                        <input type="text" id="dhcpScopeGateway" placeholder="e.g., 192.168.1.1">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>DNS Servers</label>
+                        <input type="text" id="dhcpScopeDNS" placeholder="e.g., 8.8.8.8, 8.8.4.4">
+                    </div>
+                    <div class="form-group">
+                        <label>Domain</label>
+                        <input type="text" id="dhcpScopeDomain" placeholder="e.g., office.local">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="dhcpScopeEnabled" checked>
+                        Scope Enabled
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="dhcpScopeNotes" placeholder="Additional notes..."></textarea>
+                </div>
+                <input type="hidden" id="dhcpScopeEditId">
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Save Scope</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add/Edit DHCP Lease Modal -->
+    <div id="addDHCPLeaseModal" class="modal">
+        <div class="modal-header">
+            <h3>Add DHCP Lease</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="dhcpLeaseForm" onsubmit="saveDHCPLease(event)">
+                <div class="form-group">
+                    <label>Scope *</label>
+                    <select id="dhcpLeaseScope" required>
+                        <option value="">-- Select Scope --</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>IP Address *</label>
+                        <input type="text" id="dhcpLeaseIP" required placeholder="e.g., 192.168.1.100">
+                    </div>
+                    <div class="form-group">
+                        <label>MAC Address</label>
+                        <input type="text" id="dhcpLeaseMAC" placeholder="e.g., AA:BB:CC:DD:EE:FF">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Hostname</label>
+                        <input type="text" id="dhcpLeaseHostname" placeholder="e.g., workstation-01">
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="dhcpLeaseStatus">
+                            <option value="active">Active</option>
+                            <option value="expired">Expired</option>
+                            <option value="reserved">Reserved</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Start Time</label>
+                        <input type="datetime-local" id="dhcpLeaseStart">
+                    </div>
+                    <div class="form-group">
+                        <label>End Time</label>
+                        <input type="datetime-local" id="dhcpLeaseEnd">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Notes</label>
+                    <textarea id="dhcpLeaseNotes" placeholder="Additional notes..."></textarea>
+                </div>
+                <input type="hidden" id="dhcpLeaseEditId">
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Save Lease</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Add/Edit DHCP Reservation Modal -->
+    <div id="addDHCPReservationModal" class="modal">
+        <div class="modal-header">
+            <h3>Add DHCP Reservation</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="dhcpReservationForm" onsubmit="saveDHCPReservation(event)">
+                <div class="form-group">
+                    <label>Scope *</label>
+                    <select id="dhcpResScope" required>
+                        <option value="">-- Select Scope --</option>
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>IP Address *</label>
+                        <input type="text" id="dhcpResIP" required placeholder="e.g., 192.168.1.10">
+                    </div>
+                    <div class="form-group">
+                        <label>MAC Address *</label>
+                        <input type="text" id="dhcpResMAC" required placeholder="e.g., AA:BB:CC:DD:EE:FF">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Hostname</label>
+                    <input type="text" id="dhcpResHostname" placeholder="e.g., printer-01">
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="dhcpResDescription" placeholder="Reservation description..."></textarea>
+                </div>
+                <input type="hidden" id="dhcpResEditId">
+                <div class="form-actions">
+                    <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+                    <button type="submit" class="btn-primary">Save Reservation</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- DHCP Scope Detail Modal -->
+    <div id="dhcpScopeDetailModal" class="modal modal-large">
+        <div class="modal-header">
+            <h3>Scope Details</h3>
+            <button class="modal-close" onclick="closeModal()">&times;</button>
+        </div>
+        <div class="modal-body" id="dhcpScopeDetailContent">
+            <!-- Populated by JavaScript -->
+        </div>
+    </div>
+
     <!-- Toast Notification -->
     <div id="toast" class="toast">
         <div class="toast-icon"></div>
@@ -2061,6 +2329,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/sql.js@1.11.0/dist/sql-wasm.js"></script>
     <script src="modules/db.js"></script>
+    <script src="modules/api.js"></script>
     <script src="modules/utils.js"></script>
     <script src="modules/constants.js"></script>
     <script src="modules/vlan-manager.js"></script>
@@ -2072,6 +2341,7 @@
     <script src="modules/subnet-calculator.js"></script>
     <script src="modules/ip-history.js"></script>
     <script src="modules/maintenance-manager.js"></script>
+    <script src="modules/dhcp-manager.js"></script>
     <script src="modules/location-manager.js"></script>
     <script src="modules/global-search.js"></script>
     <script src="modules/saved-filters.js"></script>

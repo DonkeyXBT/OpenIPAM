@@ -197,3 +197,25 @@ const HOST_TYPES = [
     { id: 'mail', name: 'Mail Server', icon: '📧' },
     { id: 'printer', name: 'Printer', icon: '🖨️' }
 ];
+
+const DHCP_LEASE_STATUS = [
+    { id: 'active', name: 'Active', color: '#22c55e' },
+    { id: 'expired', name: 'Expired', color: '#ef4444' },
+    { id: 'reserved', name: 'Reserved', color: '#3b82f6' }
+];
+
+const DHCP_OPTION_TYPES = [
+    { code: 1, name: 'Subnet Mask' },
+    { code: 3, name: 'Router' },
+    { code: 6, name: 'DNS Servers' },
+    { code: 15, name: 'Domain Name' },
+    { code: 28, name: 'Broadcast Address' },
+    { code: 42, name: 'NTP Servers' },
+    { code: 44, name: 'NetBIOS Name Server' },
+    { code: 51, name: 'Lease Time' },
+    { code: 66, name: 'TFTP Server' },
+    { code: 67, name: 'Bootfile Name' },
+    { code: 119, name: 'Domain Search List' },
+    { code: 121, name: 'Classless Static Routes' },
+    { code: 150, name: 'TFTP Server Address' }
+];

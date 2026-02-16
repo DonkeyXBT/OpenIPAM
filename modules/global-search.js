@@ -95,6 +95,21 @@ const GlobalSearch = {
                 });
             }
         });
-        return results.slice(0, 20); 
+        const dhcpScopes = DB.get(DB.KEYS.DHCP_SCOPES);
+        dhcpScopes.forEach(scope => {
+            if (scope.name?.toLowerCase().includes(q) ||
+                scope.startIP?.toLowerCase().includes(q) ||
+                scope.endIP?.toLowerCase().includes(q)) {
+                results.push({
+                    type: 'dhcp_scope',
+                    id: scope.id,
+                    title: scope.name || `${scope.startIP} - ${scope.endIP}`,
+                    subtitle: `${scope.startIP} - ${scope.endIP}`,
+                    icon: '📋',
+                    page: 'dhcp'
+                });
+            }
+        });
+        return results.slice(0, 20);
     }
 };

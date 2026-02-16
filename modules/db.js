@@ -13,13 +13,20 @@ const DB = {
         IP_HISTORY: 'ipdb_ip_history',
         MAINTENANCE_WINDOWS: 'ipdb_maintenance_windows',
         LOCATIONS: 'ipdb_locations',
-        SAVED_FILTERS: 'ipdb_saved_filters'
+        SAVED_FILTERS: 'ipdb_saved_filters',
+        DHCP_SCOPES: 'ipdb_dhcp_scopes',
+        DHCP_OPTIONS: 'ipdb_dhcp_options',
+        DHCP_LEASES: 'ipdb_dhcp_leases',
+        DHCP_RESERVATIONS: 'ipdb_dhcp_reservations'
     },
 
     _db: null,
     _saveTimer: null,
     _migrating: false,
     _idbName: 'NetManagerDB',
+    _pendingSave: false,
+    _storageBackend: 'none', // 'sqlite+idb', 'sqlite+localstorage', 'localstorage'
+    _backendAvailable: false,
 
     _tableMap: {
         'ipdb_companies': 'companies',
@@ -34,7 +41,11 @@ const DB = {
         'ipdb_ip_history': 'ip_history',
         'ipdb_maintenance_windows': 'maintenance_windows',
         'ipdb_locations': 'locations',
-        'ipdb_saved_filters': 'saved_filters'
+        'ipdb_saved_filters': 'saved_filters',
+        'ipdb_dhcp_scopes': 'dhcp_scopes',
+        'ipdb_dhcp_options': 'dhcp_options',
+        'ipdb_dhcp_leases': 'dhcp_leases',
+        'ipdb_dhcp_reservations': 'dhcp_reservations'
     },
 
     _jsonColumns: {
@@ -226,6 +237,53 @@ const DB = {
         `CREATE TABLE IF NOT EXISTS settings (
             key TEXT PRIMARY KEY,
             value TEXT
+        )`,
+        `CREATE TABLE IF NOT EXISTS dhcp_scopes (
+            id TEXT PRIMARY KEY,
+            name TEXT,
+            subnetId TEXT,
+            startIP TEXT,
+            endIP TEXT,
+            leaseTime INTEGER DEFAULT 86400,
+            dns TEXT,
+            gateway TEXT,
+            domain TEXT,
+            enabled INTEGER DEFAULT 1,
+            notes TEXT,
+            createdAt TEXT,
+            updatedAt TEXT
+        )`,
+        `CREATE TABLE IF NOT EXISTS dhcp_options (
+            id TEXT PRIMARY KEY,
+            scopeId TEXT,
+            optionCode INTEGER,
+            optionName TEXT,
+            optionValue TEXT,
+            createdAt TEXT,
+            updatedAt TEXT
+        )`,
+        `CREATE TABLE IF NOT EXISTS dhcp_leases (
+            id TEXT PRIMARY KEY,
+            scopeId TEXT,
+            ipAddress TEXT,
+            macAddress TEXT,
+            hostname TEXT,
+            status TEXT DEFAULT 'active',
+            startTime TEXT,
+            endTime TEXT,
+            notes TEXT,
+            createdAt TEXT,
+            updatedAt TEXT
+        )`,
+        `CREATE TABLE IF NOT EXISTS dhcp_reservations (
+            id TEXT PRIMARY KEY,
+            scopeId TEXT,
+            ipAddress TEXT,
+            macAddress TEXT,
+            hostname TEXT,
+            description TEXT,
+            createdAt TEXT,
+            updatedAt TEXT
         )`
     ],
 
@@ -247,27 +305,139 @@ const DB = {
                 locateFile: file => `https://cdn.jsdelivr.net/npm/sql.js@1.11.0/dist/${file}`
             });
 
-            const savedData = await this._loadFromIDB();
+            // Test IndexedDB availability
+            const idbAvailable = await this._testIDB();
+
+            const savedData = idbAvailable ? await this._loadFromIDB() : null;
             if (savedData) {
                 this._db = new SQL.Database(savedData);
                 this._createTables();
+                this._storageBackend = 'sqlite+idb';
                 console.log('OpenIPAM: SQLite loaded from IndexedDB');
             } else {
                 this._db = new SQL.Database();
                 this._createTables();
+                this._storageBackend = idbAvailable ? 'sqlite+idb' : 'sqlite+localstorage';
                 const migrated = this._migrateFromLocalStorage();
                 if (migrated) {
                     await this._persist();
                 }
                 console.log('OpenIPAM: SQLite initialized' + (migrated ? ' (migrated from localStorage)' : ''));
+                if (!idbAvailable) {
+                    console.warn('OpenIPAM: IndexedDB unavailable, SQLite will persist to localStorage (limited to ~5MB)');
+                }
             }
+
+            // Register beforeunload handler to flush pending saves
+            window.addEventListener('beforeunload', (e) => {
+                if (this._pendingSave && this._db) {
+                    this._flushSync();
+                }
+            });
+
+            // Also persist on visibility change (covers mobile tab switching, etc.)
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'hidden' && this._pendingSave && this._db) {
+                    this._persist();
+                }
+            });
+
+            // Check for backend availability
+            if (typeof API !== 'undefined' && API.checkHealth) {
+                try {
+                    this._backendAvailable = await API.checkHealth();
+                    if (this._backendAvailable) {
+                        console.log('OpenIPAM: Backend API detected');
+                    }
+                } catch(e) {
+                    this._backendAvailable = false;
+                }
+            }
+
         } catch (e) {
             console.error('OpenIPAM: SQLite init failed, using localStorage fallback', e);
+            this._db = null;
+            this._storageBackend = 'localstorage';
             if (localStorage.getItem('ipdb_sqlite_migrated') === 'true') {
                 console.warn('OpenIPAM: Data was previously migrated to SQLite. localStorage data may be outdated.');
             }
-            this._db = null;
+            this._showStorageWarning('SQLite/WebAssembly failed to load. Data is being stored in localStorage which has limited capacity (~5MB). Ensure your Apache server serves .wasm files with the correct MIME type (application/wasm).');
         }
+    },
+
+    // Test whether IndexedDB is available and writable
+    _testIDB() {
+        return new Promise((resolve) => {
+            try {
+                const request = indexedDB.open('_idb_test', 1);
+                request.onsuccess = (e) => {
+                    e.target.result.close();
+                    indexedDB.deleteDatabase('_idb_test');
+                    resolve(true);
+                };
+                request.onerror = () => resolve(false);
+                setTimeout(() => resolve(false), 2000);
+            } catch(e) {
+                resolve(false);
+            }
+        });
+    },
+
+    // Synchronous flush for beforeunload - uses localStorage as fallback
+    _flushSync() {
+        if (!this._db) return;
+        try {
+            const data = this._db.export();
+            const buffer = new Uint8Array(data);
+            // In beforeunload, we can't await IDB, so save to localStorage as a safety net
+            const blob = this._uint8ToBase64(buffer);
+            localStorage.setItem('ipdb_sqlite_backup', blob);
+            // Also attempt an async IDB save (browser may or may not complete it)
+            this._saveToIDB(buffer).catch(() => {});
+            this._pendingSave = false;
+        } catch(e) {
+            console.error('OpenIPAM: Sync flush failed:', e);
+        }
+    },
+
+    _uint8ToBase64(uint8) {
+        let binary = '';
+        const len = uint8.byteLength;
+        const chunkSize = 8192;
+        for (let i = 0; i < len; i += chunkSize) {
+            const chunk = uint8.subarray(i, Math.min(i + chunkSize, len));
+            binary += String.fromCharCode.apply(null, chunk);
+        }
+        return btoa(binary);
+    },
+
+    _base64ToUint8(base64) {
+        const binary = atob(base64);
+        const len = binary.length;
+        const bytes = new Uint8Array(len);
+        for (let i = 0; i < len; i++) {
+            bytes[i] = binary.charCodeAt(i);
+        }
+        return bytes;
+    },
+
+    _showStorageWarning(message) {
+        // Show a non-blocking warning banner at the top of the page
+        const existing = document.getElementById('db-storage-warning');
+        if (existing) existing.remove();
+        const banner = document.createElement('div');
+        banner.id = 'db-storage-warning';
+        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:#d32f2f;color:#fff;padding:10px 16px;font-size:14px;text-align:center;font-family:sans-serif;';
+        banner.innerHTML = `&#9888; ${message} <button onclick="this.parentElement.remove()" style="margin-left:16px;background:rgba(255,255,255,0.2);border:1px solid rgba(255,255,255,0.4);color:#fff;padding:2px 10px;cursor:pointer;border-radius:3px;">Dismiss</button>`;
+        document.body.appendChild(banner);
+    },
+
+    getStorageBackend() {
+        return this._storageBackend;
+    },
+
+    useBackend() {
+        return this._backendAvailable;
     },
 
     _createTables() {
@@ -487,6 +657,7 @@ const DB = {
 
     _scheduleSave() {
         if (this._migrating) return;
+        this._pendingSave = true;
         if (this._saveTimer) clearTimeout(this._saveTimer);
         this._saveTimer = setTimeout(() => this._persist(), 500);
     },
@@ -496,7 +667,35 @@ const DB = {
         try {
             const data = this._db.export();
             const buffer = new Uint8Array(data);
-            return this._saveToIDB(buffer);
+
+            if (this._storageBackend === 'sqlite+localstorage') {
+                // IndexedDB not available — persist via localStorage
+                try {
+                    const blob = this._uint8ToBase64(buffer);
+                    localStorage.setItem('ipdb_sqlite_backup', blob);
+                    this._pendingSave = false;
+                } catch(e) {
+                    console.error('OpenIPAM: localStorage save failed (likely quota exceeded):', e);
+                    this._showStorageWarning('Storage quota exceeded. Please export your data (Settings > Backup) to avoid data loss.');
+                }
+                return Promise.resolve();
+            }
+
+            return this._saveToIDB(buffer).then(() => {
+                this._pendingSave = false;
+                // Clear any emergency localStorage backup after successful IDB save
+                localStorage.removeItem('ipdb_sqlite_backup');
+            }).catch(e => {
+                console.error('OpenIPAM: IndexedDB save failed, falling back to localStorage:', e);
+                try {
+                    const blob = this._uint8ToBase64(buffer);
+                    localStorage.setItem('ipdb_sqlite_backup', blob);
+                    this._pendingSave = false;
+                } catch(lsErr) {
+                    console.error('OpenIPAM: All persistence failed:', lsErr);
+                    this._showStorageWarning('Failed to save data. Please export your data immediately (Settings > Backup).');
+                }
+            });
         } catch(e) {
             console.error('Failed to export SQLite DB:', e);
             return Promise.resolve();
@@ -520,18 +719,38 @@ const DB = {
                     const getReq = store.get('db');
                     getReq.onsuccess = () => {
                         db.close();
-                        resolve(getReq.result || null);
+                        if (getReq.result) {
+                            // Clear any emergency backup since IDB has data
+                            localStorage.removeItem('ipdb_sqlite_backup');
+                            resolve(getReq.result);
+                        } else {
+                            // Try to recover from localStorage backup
+                            resolve(this._loadFromLocalStorageBackup());
+                        }
                     };
                     getReq.onerror = () => {
                         db.close();
-                        resolve(null);
+                        resolve(this._loadFromLocalStorageBackup());
                     };
                 };
-                request.onerror = () => resolve(null);
+                request.onerror = () => resolve(this._loadFromLocalStorageBackup());
             } catch(e) {
-                resolve(null);
+                resolve(this._loadFromLocalStorageBackup());
             }
         });
+    },
+
+    _loadFromLocalStorageBackup() {
+        try {
+            const backup = localStorage.getItem('ipdb_sqlite_backup');
+            if (backup) {
+                console.log('OpenIPAM: Recovering SQLite database from localStorage backup');
+                return this._base64ToUint8(backup);
+            }
+        } catch(e) {
+            console.warn('OpenIPAM: Failed to load localStorage backup:', e);
+        }
+        return null;
     },
 
     _saveToIDB(data) {
