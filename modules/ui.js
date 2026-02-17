@@ -58,6 +58,11 @@ function navigateTo(page) {
     }
     updateSavedFiltersDropdown(page);
 }
+function refreshCurrentPage() {
+    const activePage = document.querySelector('.page.active');
+    if (!activePage) return;
+    navigateTo(activePage.id);
+}
 document.querySelectorAll('.nav-item').forEach(item => {
     item.addEventListener('click', () => navigateTo(item.dataset.page));
 });

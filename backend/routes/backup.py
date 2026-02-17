@@ -17,11 +17,16 @@ TABLES = {
     'ipHistory': 'ip_history',
     'maintenanceWindows': 'maintenance_windows',
     'auditLog': 'audit_log',
+    'locations': 'locations',
+    'savedFilters': 'saved_filters',
     'dhcpScopes': 'dhcp_scopes',
     'dhcpOptions': 'dhcp_options',
     'dhcpLeases': 'dhcp_leases',
     'dhcpReservations': 'dhcp_reservations',
 }
+
+# Reverse map: SQL table name -> camelCase key (for sync endpoint)
+TABLE_NAME_TO_KEY = {v: k for k, v in TABLES.items()}
 
 JSON_FIELDS = {
     'subnet_templates': ['ranges', 'reservations'],
@@ -122,3 +127,66 @@ def import_backup():
 
     db.commit()
     return jsonify({'success': True, 'message': 'Backup imported successfully'})
+
+
+# --- Allowed table names for the sync endpoint (whitelist for safety) ---
+ALLOWED_SYNC_TABLES = set(TABLES.values()) | {'settings'}
+
+
+@bp.route('/sync/<table_name>', methods=['PUT'])
+def sync_table(table_name):
+    """Replace all rows in a single table. Used by the frontend DB.set() to push changes."""
+    if table_name not in ALLOWED_SYNC_TABLES:
+        return jsonify({'error': f'Unknown table: {table_name}'}), 400
+
+    body = request.get_json()
+    if body is None:
+        return jsonify({'error': 'Missing JSON body'}), 400
+
+    db = get_db()
+
+    # Handle settings table specially (key/value store)
+    if table_name == 'settings':
+        data = body.get('data', {})
+        if not isinstance(data, dict):
+            return jsonify({'error': 'Settings data must be an object'}), 400
+        db.execute('DELETE FROM settings')
+        for k, v in data.items():
+            db.execute('INSERT INTO settings (key, value) VALUES (?, ?)',
+                       (k, json.dumps(v)))
+        db.commit()
+        return jsonify({'success': True})
+
+    items = body.get('data', [])
+    if not isinstance(items, list):
+        return jsonify({'error': 'data must be an array'}), 400
+
+    db.execute(f'DELETE FROM {table_name}')
+
+    if items:
+        if table_name == 'reservations':
+            for item in items:
+                item_id = item.get('id', '')
+                db.execute('INSERT INTO reservations (id, json) VALUES (?, ?)',
+                           (item_id, json.dumps(item)))
+        else:
+            json_cols = JSON_FIELDS.get(table_name, [])
+            info = db.execute(f'PRAGMA table_info({table_name})').fetchall()
+            valid_cols = [r['name'] for r in info]
+
+            for item in items:
+                cols = []
+                vals = []
+                for col in valid_cols:
+                    if col in item:
+                        val = item[col]
+                        if col in json_cols and val is not None and not isinstance(val, str):
+                            val = json.dumps(val)
+                        cols.append(col)
+                        vals.append(val)
+                if cols:
+                    placeholders = ','.join(['?'] * len(cols))
+                    db.execute(f'INSERT INTO {table_name} ({",".join(cols)}) VALUES ({placeholders})', vals)
+
+    db.commit()
+    return jsonify({'success': True})

@@ -29,6 +29,8 @@ from routes.templates import bp as templates_bp
 from routes.audit_log import bp as audit_log_bp
 from routes.settings import bp as settings_bp
 from routes.backup import bp as backup_bp
+from routes.saved_filters import bp as saved_filters_bp
+from routes.ip_history import bp as ip_history_bp
 
 app.register_blueprint(companies_bp, url_prefix='/api/v1')
 app.register_blueprint(subnets_bp, url_prefix='/api/v1')
@@ -43,6 +45,8 @@ app.register_blueprint(templates_bp, url_prefix='/api/v1')
 app.register_blueprint(audit_log_bp, url_prefix='/api/v1')
 app.register_blueprint(settings_bp, url_prefix='/api/v1')
 app.register_blueprint(backup_bp, url_prefix='/api/v1')
+app.register_blueprint(saved_filters_bp, url_prefix='/api/v1')
+app.register_blueprint(ip_history_bp, url_prefix='/api/v1')
 
 
 # --- Health endpoint ---

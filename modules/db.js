@@ -27,6 +27,8 @@ const DB = {
     _pendingSave: false,
     _storageBackend: 'none', // 'sqlite+idb', 'sqlite+localstorage', 'localstorage'
     _backendAvailable: false,
+    _refreshTimer: null,
+    _syncing: false,
 
     _tableMap: {
         'ipdb_companies': 'companies',
@@ -56,6 +58,48 @@ const DB = {
     },
 
     _blobTables: new Set(['reservations']),
+
+    // Maps DB.KEYS -> backend sync table name
+    _apiTableMap: {
+        'ipdb_companies': 'companies',
+        'ipdb_subnets': 'subnets',
+        'ipdb_hosts': 'hosts',
+        'ipdb_ips': 'ips',
+        'ipdb_vlans': 'vlans',
+        'ipdb_ip_ranges': 'ip_ranges',
+        'ipdb_subnet_templates': 'subnet_templates',
+        'ipdb_reservations': 'reservations',
+        'ipdb_audit_log': 'audit_log',
+        'ipdb_ip_history': 'ip_history',
+        'ipdb_maintenance_windows': 'maintenance_windows',
+        'ipdb_locations': 'locations',
+        'ipdb_saved_filters': 'saved_filters',
+        'ipdb_dhcp_scopes': 'dhcp_scopes',
+        'ipdb_dhcp_options': 'dhcp_options',
+        'ipdb_dhcp_leases': 'dhcp_leases',
+        'ipdb_dhcp_reservations': 'dhcp_reservations'
+    },
+
+    // Maps backup JSON keys -> DB.KEYS
+    _backupKeyMap: {
+        'companies': 'ipdb_companies',
+        'subnets': 'ipdb_subnets',
+        'hosts': 'ipdb_hosts',
+        'ips': 'ipdb_ips',
+        'vlans': 'ipdb_vlans',
+        'ipRanges': 'ipdb_ip_ranges',
+        'subnetTemplates': 'ipdb_subnet_templates',
+        'reservations': 'ipdb_reservations',
+        'auditLog': 'ipdb_audit_log',
+        'ipHistory': 'ipdb_ip_history',
+        'maintenanceWindows': 'ipdb_maintenance_windows',
+        'locations': 'ipdb_locations',
+        'savedFilters': 'ipdb_saved_filters',
+        'dhcpScopes': 'ipdb_dhcp_scopes',
+        'dhcpOptions': 'ipdb_dhcp_options',
+        'dhcpLeases': 'ipdb_dhcp_leases',
+        'dhcpReservations': 'ipdb_dhcp_reservations'
+    },
 
     _createTableSQL: [
         `CREATE TABLE IF NOT EXISTS companies (
@@ -342,12 +386,14 @@ const DB = {
                 }
             });
 
-            // Check for backend availability
+            // Check for backend availability and load server data
             if (typeof API !== 'undefined' && API.checkHealth) {
                 try {
                     this._backendAvailable = await API.checkHealth();
                     if (this._backendAvailable) {
-                        console.log('OpenIPAM: Backend API detected');
+                        console.log('OpenIPAM: Backend API detected, loading server data...');
+                        await this._loadFromBackend();
+                        this._startAutoRefresh();
                     }
                 } catch(e) {
                     this._backendAvailable = false;
@@ -506,6 +552,9 @@ const DB = {
 
         if (this._blobTables.has(table)) {
             this._setBlobTable(table, data);
+            if (this._backendAvailable) {
+                this._pushToBackend(table, data);
+            }
             return;
         }
 
@@ -547,6 +596,10 @@ const DB = {
 
             this._db.run('COMMIT');
             this._scheduleSave();
+            // Push to backend (fire-and-forget)
+            if (this._backendAvailable) {
+                this._pushToBackend(this._apiTableMap[key], data);
+            }
         } catch (e) {
             try { this._db.run('ROLLBACK'); } catch(re) {}
             console.error(`DB.set error for ${key}:`, e);
@@ -614,6 +667,10 @@ const DB = {
             }
             this._db.run('COMMIT');
             this._scheduleSave();
+            // Push settings to backend
+            if (this._backendAvailable) {
+                this._pushToBackend('settings', data);
+            }
         } catch(e) {
             try { this._db.run('ROLLBACK'); } catch(re) {}
             console.error('DB._setSettings error:', e);
@@ -825,5 +882,132 @@ const DB = {
         }
 
         return migrated;
+    },
+
+    // --- Backend sync methods ---
+
+    async _loadFromBackend() {
+        try {
+            const res = await fetch('/api/v1/backup');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const backup = await res.json();
+            this._applyBackupToLocal(backup);
+            console.log('OpenIPAM: Server data loaded into local cache');
+        } catch(e) {
+            console.warn('OpenIPAM: Failed to load from backend, using local data:', e);
+        }
+    },
+
+    _applyBackupToLocal(backup) {
+        // Temporarily disable migration flag to allow _setSettings calls
+        const wasMigrating = this._migrating;
+        this._migrating = true; // prevent _scheduleSave during bulk load
+
+        try {
+            for (const [backupKey, dbKey] of Object.entries(this._backupKeyMap)) {
+                const items = backup[backupKey];
+                if (!Array.isArray(items)) continue;
+                const table = this._tableMap[dbKey];
+                if (!table) continue;
+
+                if (this._blobTables.has(table)) {
+                    this._setBlobTable(table, items);
+                } else {
+                    const jsonCols = this._jsonColumns[table] || [];
+                    try {
+                        this._db.run('BEGIN TRANSACTION');
+                        this._db.run(`DELETE FROM ${table}`);
+                        const tableInfo = this._db.exec(`PRAGMA table_info(${table})`);
+                        const validColumns = tableInfo[0].values.map(r => r[1]);
+
+                        for (const item of items) {
+                            const cols = [];
+                            const vals = [];
+                            const placeholders = [];
+                            for (const col of validColumns) {
+                                if (col in item) {
+                                    cols.push(col);
+                                    let val = item[col];
+                                    if (val != null && jsonCols.includes(col) && typeof val !== 'string') {
+                                        val = JSON.stringify(val);
+                                    }
+                                    vals.push(val ?? null);
+                                    placeholders.push('?');
+                                }
+                            }
+                            if (cols.length > 0) {
+                                this._db.run(
+                                    `INSERT INTO ${table} (${cols.join(',')}) VALUES (${placeholders.join(',')})`,
+                                    vals
+                                );
+                            }
+                        }
+                        this._db.run('COMMIT');
+                    } catch(e) {
+                        try { this._db.run('ROLLBACK'); } catch(re) {}
+                        console.error(`Failed to load ${backupKey} from backend:`, e);
+                    }
+                }
+            }
+
+            // Settings
+            if (backup.settings && typeof backup.settings === 'object') {
+                try {
+                    this._db.run('BEGIN TRANSACTION');
+                    this._db.run('DELETE FROM settings');
+                    for (const [key, value] of Object.entries(backup.settings)) {
+                        this._db.run('INSERT INTO settings (key, value) VALUES (?, ?)',
+                            [key, JSON.stringify(value)]);
+                    }
+                    this._db.run('COMMIT');
+                } catch(e) {
+                    try { this._db.run('ROLLBACK'); } catch(re) {}
+                    console.error('Failed to load settings from backend:', e);
+                }
+            }
+        } finally {
+            this._migrating = wasMigrating;
+        }
+
+        // Persist the updated local DB
+        this._persist();
+    },
+
+    async _refreshFromBackend() {
+        if (!this._backendAvailable || this._syncing) return;
+        this._syncing = true;
+        try {
+            const res = await fetch('/api/v1/backup');
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const backup = await res.json();
+            this._applyBackupToLocal(backup);
+            // Re-render current page to show updated data
+            if (typeof refreshCurrentPage === 'function') {
+                refreshCurrentPage();
+            }
+        } catch(e) {
+            console.warn('OpenIPAM: Background refresh failed:', e);
+        } finally {
+            this._syncing = false;
+        }
+    },
+
+    _startAutoRefresh() {
+        // Poll every 30 seconds
+        this._refreshTimer = setInterval(() => this._refreshFromBackend(), 30000);
+        // Also refresh on window focus
+        window.addEventListener('focus', () => this._refreshFromBackend());
+    },
+
+    _pushToBackend(tableName, data) {
+        if (!tableName) return;
+        const body = { data: data };
+        fetch(`/api/v1/sync/${tableName}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        }).catch(e => {
+            console.warn(`OpenIPAM: Failed to push ${tableName} to backend:`, e);
+        });
     }
 };
