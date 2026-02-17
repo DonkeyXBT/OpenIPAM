@@ -37,7 +37,7 @@ install_python() {
     case "$DISTRO" in
         ubuntu|debian|pop|linuxmint)
             sudo apt-get update -qq
-            sudo apt-get install -y -qq python3 python3-pip python3-venv
+            sudo apt-get install -y -qq python3 python3-pip python3-venv libxmlsec1-dev pkg-config
             ;;
         centos|rhel|rocky|alma)
             sudo yum install -y python3 python3-pip python3-virtualenv

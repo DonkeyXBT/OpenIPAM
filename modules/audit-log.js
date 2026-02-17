@@ -2,6 +2,7 @@ const AuditLog = {
     MAX_ENTRIES: 500,
     log(action, entityType, entityId, details, oldValue = null, newValue = null) {
         const logs = DB.get(DB.KEYS.AUDIT_LOG);
+        const user = window.currentUser || {};
         const entry = {
             id: DB.generateId(),
             timestamp: new Date().toISOString(),
@@ -10,7 +11,9 @@ const AuditLog = {
             entityId,
             details,
             oldValue,
-            newValue
+            newValue,
+            userId: user.email || '',
+            userName: user.displayName || ''
         };
         logs.unshift(entry);
         if (logs.length > this.MAX_ENTRIES) {

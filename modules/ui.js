@@ -2250,12 +2250,15 @@ function refreshAuditLog() {
             'reserve': '🔒'
         };
         const icon = actionIcons[log.action] || '📝';
+        const userBadge = (log.userName || log.userId)
+            ? `<span class="audit-user" style="font-size:11px;color:var(--text-secondary);margin-left:8px;" title="${escapeHtml(log.userId || '')}">${escapeHtml(log.userName || log.userId)}</span>`
+            : '';
         return `
             <div class="audit-log-item">
                 <span class="audit-icon">${icon}</span>
                 <div class="audit-details">
                     <span class="audit-action">${log.action.toUpperCase()}</span>
-                    <span class="audit-entity">${log.entityType}</span>
+                    <span class="audit-entity">${log.entityType}</span>${userBadge}
                     <p class="audit-description">${escapeHtml(log.details)}</p>
                     <span class="audit-time">${timeStr}</span>
                 </div>

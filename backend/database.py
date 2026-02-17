@@ -169,7 +169,9 @@ CREATE_TABLES_SQL = [
         entityId TEXT,
         details TEXT,
         oldValue TEXT,
-        newValue TEXT
+        newValue TEXT,
+        userId TEXT,
+        userName TEXT
     )""",
     """CREATE TABLE IF NOT EXISTS ip_history (
         id TEXT PRIMARY KEY,
@@ -247,11 +249,23 @@ CREATE_TABLES_SQL = [
     )"""
 ]
 
+def _run_migrations(db):
+    """Add columns to existing tables if they don't exist yet."""
+    # Check if audit_log has userId column
+    cursor = db.execute("PRAGMA table_info(audit_log)")
+    columns = [row[1] for row in cursor.fetchall()]
+    if 'userId' not in columns:
+        db.execute('ALTER TABLE audit_log ADD COLUMN userId TEXT')
+    if 'userName' not in columns:
+        db.execute('ALTER TABLE audit_log ADD COLUMN userName TEXT')
+
+
 def init_db():
     db = sqlite3.connect(DB_PATH)
     db.execute('PRAGMA foreign_keys = ON')
     db.execute('PRAGMA journal_mode = WAL')
     for sql in CREATE_TABLES_SQL:
         db.execute(sql)
+    _run_migrations(db)
     db.commit()
     db.close()

@@ -30,6 +30,15 @@ let visibleColumns = {
 };
 
 document.addEventListener('DOMContentLoaded', async () => {
+    // Authenticate before loading data
+    if (typeof Auth !== 'undefined') {
+        const authenticated = await Auth.init();
+        if (!authenticated) {
+            // Not logged in — the server will serve the login page on next navigation
+            // but if we got here, let DB.init() proceed (it will handle 401s)
+        }
+    }
+
     await DB.init();
 
     // Load persisted UI settings from DB

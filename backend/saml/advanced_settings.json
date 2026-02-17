@@ -1,0 +1,31 @@
+{
+    "security": {
+        "nameIdEncrypted": false,
+        "authnRequestsSigned": false,
+        "logoutRequestSigned": false,
+        "logoutResponseSigned": false,
+        "signMetadata": false,
+        "wantMessagesSigned": false,
+        "wantAssertionsSigned": true,
+        "wantAssertionsEncrypted": false,
+        "wantNameId": true,
+        "wantNameIdEncrypted": false,
+        "wantAttributeStatement": false,
+        "requestedAuthnContext": false,
+        "relaxDestinationValidation": true,
+        "destinationStrictlyMatches": false
+    },
+    "contactPerson": {
+        "technical": {
+            "givenName": "Admin",
+            "emailAddress": "admin@example.com"
+        }
+    },
+    "organization": {
+        "en-US": {
+            "name": "OpenIPAM",
+            "displayname": "OpenIPAM",
+            "url": "https://example.com"
+        }
+    }
+}

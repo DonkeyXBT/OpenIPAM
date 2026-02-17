@@ -1,10 +1,17 @@
 import os
-from flask import Flask, send_from_directory, jsonify, request
+from datetime import timedelta
+from flask import Flask, send_from_directory, jsonify, request, session, g
 from flask_cors import CORS
 from database import init_db, close_db, get_db
 
 app = Flask(__name__, static_folder=None)
-CORS(app)
+CORS(app, supports_credentials=True)
+
+# Session / secret key configuration
+app.secret_key = os.environ.get('FLASK_SECRET_KEY', os.urandom(32))
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=8)
 
 # Parent directory has the frontend files
 FRONTEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -31,6 +38,7 @@ from routes.settings import bp as settings_bp
 from routes.backup import bp as backup_bp
 from routes.saved_filters import bp as saved_filters_bp
 from routes.ip_history import bp as ip_history_bp
+from routes.auth import bp as auth_bp
 
 app.register_blueprint(companies_bp, url_prefix='/api/v1')
 app.register_blueprint(subnets_bp, url_prefix='/api/v1')
@@ -47,6 +55,35 @@ app.register_blueprint(settings_bp, url_prefix='/api/v1')
 app.register_blueprint(backup_bp, url_prefix='/api/v1')
 app.register_blueprint(saved_filters_bp, url_prefix='/api/v1')
 app.register_blueprint(ip_history_bp, url_prefix='/api/v1')
+app.register_blueprint(auth_bp, url_prefix='/auth')
+
+
+# --- Authentication gate ---
+OPEN_PREFIXES = ('/auth/', '/api/v1/health')
+STATIC_EXTENSIONS = ('.css', '.js', '.png', '.jpg', '.svg', '.ico', '.woff', '.woff2', '.ttf', '.wasm')
+
+@app.before_request
+def require_login():
+    path = request.path
+    # Allow auth routes and health check through
+    if any(path.startswith(p) for p in OPEN_PREFIXES):
+        return None
+    # Allow login.html and its static assets
+    if path == '/login.html':
+        return None
+    # Set current user on g for downstream use
+    g.current_user = session.get('user')
+    # Allow static file requests through (fonts, css, js needed by login page)
+    if any(path.endswith(ext) for ext in STATIC_EXTENSIONS):
+        return None
+    # Check authentication
+    if not session.get('user'):
+        # API requests get 401
+        if path.startswith('/api/'):
+            return jsonify({'error': 'Authentication required'}), 401
+        # Page requests get login page
+        return send_from_directory(FRONTEND_DIR, 'login.html')
+    return None
 
 
 # --- Health endpoint ---

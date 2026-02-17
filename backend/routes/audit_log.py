@@ -47,16 +47,20 @@ def clear_audit_log():
 
 def log_action(action, entity_type, entity_id, details, old_value=None, new_value=None):
     """Helper function for other routes to call to log audit entries."""
-    from flask import current_app
+    from flask import current_app, g
     try:
         db = get_db()
         new_id = uuid.uuid4().hex[:12]
         now = datetime.utcnow().isoformat() + 'Z'
+        user = getattr(g, 'current_user', None) or {}
+        user_id = user.get('email', '')
+        user_name = user.get('displayName', '')
         db.execute(
-            'INSERT INTO audit_log (id, timestamp, action, entityType, entityId, details, oldValue, newValue) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+            'INSERT INTO audit_log (id, timestamp, action, entityType, entityId, details, oldValue, newValue, userId, userName) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
             (new_id, now, action, entity_type, entity_id, details,
              json.dumps(old_value) if old_value else None,
-             json.dumps(new_value) if new_value else None)
+             json.dumps(new_value) if new_value else None,
+             user_id, user_name)
         )
         db.commit()
     except Exception as e:

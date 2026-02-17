@@ -253,7 +253,9 @@ const DB = {
             entityId TEXT,
             details TEXT,
             oldValue TEXT,
-            newValue TEXT
+            newValue TEXT,
+            userId TEXT,
+            userName TEXT
         )`,
         `CREATE TABLE IF NOT EXISTS ip_history (
             id TEXT PRIMARY KEY,
@@ -889,6 +891,10 @@ const DB = {
     async _loadFromBackend() {
         try {
             const res = await fetch('/api/v1/backup');
+            if (res.status === 401) {
+                window.location.href = '/auth/saml/login';
+                return;
+            }
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const backup = await res.json();
             this._applyBackupToLocal(backup);
@@ -978,6 +984,10 @@ const DB = {
         this._syncing = true;
         try {
             const res = await fetch('/api/v1/backup');
+            if (res.status === 401) {
+                window.location.href = '/auth/saml/login';
+                return;
+            }
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const backup = await res.json();
             this._applyBackupToLocal(backup);
